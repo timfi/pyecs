@@ -1,10 +1,10 @@
 from __future__ import annotations
-from collections import defaultdict
-from dataclasses import field, dataclass
-from time import time
-from typing import Dict, List, Optional, Type, Any, Tuple, Callable
-from uuid import uuid4, UUID
 
+from collections import defaultdict
+from dataclasses import dataclass, field
+from time import time
+from typing import Any, Callable, Dict, List, Optional, Tuple, Type
+from uuid import UUID, uuid4
 
 __all__ = ("ECSController", "Component")
 
@@ -30,7 +30,7 @@ class ECSController:
 
     def __post_init__(self):
         for component_type in _COMPONENT_REGISTRY:
-            self._components[component_type] = dict()
+            self._components[component_type.type()] = dict()
 
     def __getitem__(self, key: str) -> Any:
         return self.data[key]
@@ -142,9 +142,9 @@ class ECSController:
             component_type_ = component_type.type()
             if component_type_ not in self._components:
                 raise TypeError(f"Unknown component type {component_type_}")
-            elif component_type_ in self._entities[entity_id]:
+            elif component_type_ not in self._entities[entity_id]:
                 raise KeyError(
-                    f"Entity {entity_id} already has a component of type {component_type_}"
+                    f"Entity {entity_id} doesn't have a component of type {component_type_}"
                 )
             if self.delay_cleanup:
                 self._to_be_delete[1].append((entity_id, component_type_))
@@ -158,6 +158,7 @@ class ECSController:
         :param component: component to delete to the entity
         """
         del self._components[component_type][entity_id]
+        del self._entities[entity_id][self._entities[entity_id].index(component_type)]
         for _, target_components, entity_cache in self._systems.values():
             if component_type in target_components and entity_id in entity_cache:
                 del entity_cache[entity_cache.index(entity_id)]
@@ -249,4 +250,3 @@ class Component:
     @classmethod
     def type(cls) -> str:
         return _COMPONENT_REGISTRY[cls]
-
