@@ -6,7 +6,11 @@ from time import time
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type
 from uuid import UUID, uuid4
 
-__all__ = ("ECSController", "Component")
+__all__ = ("ECSController", "Component", "Quit")
+
+
+class Quit(Exception):
+    ...
 
 
 @dataclass
@@ -24,6 +28,7 @@ class ECSController:
     _to_be_delete: Tuple[List[UUID], List[Tuple[UUID, str]]] = field(  # type: ignore
         init=False, default=(list(), list())
     )
+    _last_update: float = field(init=False, default_factory=time)
     data: Dict[str, Any] = field(init=False, default_factory=dict)
     delay_cleanup: bool = False
     time_per_cycle: float = 1 / 60
@@ -165,13 +170,13 @@ class ECSController:
 
     def register_system(
         self,
-        target_components: Tuple[Type[Component], ...],
+        target_components: Tuple[Type[Component], ...] = tuple(),
         name: Optional[str] = None,
         group: int = 0,
     ) -> Callable[[Callable], Callable]:
         """Register a system with the controller
 
-        :param target_components: components the system targets
+        :param target_components: components the system targets, defaults to empty tuple
         :param name: name of the system, defaults to the name of the system function
         :param group: group the system is part of, defaults to 0
         :return: a decorator to wrap the system function
@@ -217,7 +222,10 @@ class ECSController:
         while True:
             delta_t = start - time()
             start = time()
-            self._run_systems(delta_t)
+            try:
+                self._run_systems(delta_t)
+            except Quit:
+                break
 
     def _run_systems(self, delta_t: float):
         for group in sorted(self._system_groups.keys()):
@@ -226,17 +234,22 @@ class ECSController:
 
     def _run_system(self, name: str, delta_t: float):
         func, target_components, entity_cache = self._systems[name]
-        func(
-            delta_t,
-            self.data,
-            *[
+        if target_components:
+            entities = [
                 tuple(
-                    self._components[target_component][entity_id]
-                    for target_component in target_components
+                    [
+                        entity_id,
+                        *[
+                            self._components[target_component][entity_id]
+                            for target_component in target_components
+                        ],
+                    ]
                 )
                 for entity_id in entity_cache
-            ],
-        )
+            ]
+            func(delta_t, self.data, entities)
+        else:
+            func(delta_t, self.data)
 
 
 _COMPONENT_REGISTRY: Dict[Type[Component], str] = dict()

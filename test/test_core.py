@@ -61,3 +61,70 @@ def test_controller():
 
     assert uuid_b not in controller._entities
     assert uuid_b not in controller._components["A"]
+
+
+def test_systems():
+    core._COMPONENT_REGISTRY = {}
+
+    class ComponentA(core.Component, identifier="A"):
+        ...
+
+    class ComponentB(core.Component, identifier="B"):
+        ...
+
+    controller = core.ECSController()
+
+    # Test persistant data on the controller
+    @controller.register_system()
+    def system1(delta_t, data):
+        data["last_delta_t"] = delta_t
+
+    @controller.register_system()
+    def system2(delta_t, data):
+        assert data["last_delta_t"] == delta_t
+
+    controller._run_system("system1", 0)
+    assert "last_delta_t" in controller.data
+    assert controller.data["last_delta_t"] == 0
+    controller._run_system("system2", 0)
+
+    # Test entity/component collection
+    @controller.register_system((ComponentA,))
+    def system_a(delta_t, data, components):
+        # abuse delta_t to check if components is of proper length
+        assert len(components) == delta_t
+        assert all(
+            isinstance(component, ComponentA) for entity_id, component in components
+        )
+
+    @controller.register_system((ComponentA, ComponentB))
+    def system_ab(delta_t, data, components):
+        # abuse delta_t to check if components is of proper length
+        assert len(components) == delta_t
+        assert all(
+            isinstance(component_a, ComponentA) and isinstance(component_b, ComponentB)
+            for entity_id, component_a, component_b in components
+        )
+
+    controller._run_system("system_a", 0)
+    controller._run_system("system_ab", 0)
+
+    uuid_a = controller.add_entity(ComponentA())
+    controller._run_system("system_a", 1)
+    controller._run_system("system_ab", 0)
+
+    uuid_b = controller.add_entity(ComponentA())
+    controller._run_system("system_a", 2)
+    controller._run_system("system_ab", 0)
+
+    controller.add_components(uuid_a, ComponentB())
+    controller._run_system("system_a", 2)
+    controller._run_system("system_ab", 1)
+
+    controller.add_components(uuid_b, ComponentB())
+    controller._run_system("system_a", 2)
+    controller._run_system("system_ab", 2)
+
+    _ = controller.add_entity(ComponentB())
+    controller._run_system("system_a", 2)
+    controller._run_system("system_ab", 2)
