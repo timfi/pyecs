@@ -51,6 +51,6 @@ setup(
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: Implementation :: CPython",
     ],
-    extras_require={},
+    extras_require={"pyxel": ["pyxel>=1.2.6"]},
     project_urls={"Source": "https://github.com/tim-fi/pyecs"},
 )
