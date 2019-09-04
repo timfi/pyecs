@@ -37,7 +37,7 @@ setup(
     package_data={"": ["LICENSE"]},
     package_dir={"pyecs": "pyecs"},
     include_package_data=True,
-    python_requires=">=3.6",
+    python_requires=">=3.7",
     license=about["__license__"],
     zip_safe=False,
     classifiers=[
@@ -46,7 +46,6 @@ setup(
         "Natural Language :: English",
         "License :: OSI Approved :: MIT License",
         "Programming Language :: Python",
-        "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: Implementation :: CPython",
