@@ -4,7 +4,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from time import time
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type
-from uuid import UUID, uuid4
+from uuid import UUID, uuid1
 
 __all__ = ("ECSController", "Component", "Quit")
 
@@ -30,7 +30,6 @@ class ECSController:
     )
     _last_update: float = field(init=False, default_factory=time)
     data: Dict[str, Any] = field(init=False, default_factory=dict)
-    delay_cleanup: bool = False
     time_per_cycle: float = 1 / 60
 
     def __post_init__(self):
@@ -60,24 +59,42 @@ class ECSController:
 
         :return: entity id
         """
-        entity_id = uuid4()
-        while entity_id in self._entities:
-            entity_id = uuid4()
+        entity_id = uuid1()
         self._entities[entity_id] = []
         return entity_id
 
-    def delete_entity(self, entity_id: UUID):
+    def get_entity(self, entity_id: UUID, *components: Type[Component]) -> EntityProxy:
+        """Get an entity proxy correlating to an entity and some of its components
+
+        :param entity_id: id of the target entity
+        :param *components: components to collect in the proxy
+        :raises KeyError: Unknown entity id
+        :return: an entity proxy populated with the given components
+        """
+        return EntityProxy(
+            uuid=entity_id,
+            components=dict(
+                zip(
+                    [component.type() for component in components],
+                    self.get_components(entity_id, *components),
+                )
+            ),
+            _controller=self,
+        )
+
+    def delete_entity(self, entity_id: UUID, *, instant: bool = False):
         """Delete an entity from the controller.
 
         :param entity_id: entity to delete
+        :param instant: delete immediately instead of queueing deletion, defaults to False
         :raises KeyError: Unknown entity id
         """
         if entity_id not in self._entities:
             raise KeyError(f"Unknown entity id {entity_id}")
-        if self.delay_cleanup:
-            self._to_be_delete[0].append(entity_id)
-        else:
+        if instant:
             self._delete_entity(entity_id)
+        else:
+            self._to_be_delete[0].append(entity_id)
 
     def _delete_entity(self, entity_id: UUID):
         """Actually delete an entity from the controller
@@ -132,11 +149,46 @@ class ECSController:
             ):
                 entity_cache.append(entity_id)
 
-    def delete_components(self, entity_id: UUID, *component_types: Type[Component]):
+    def get_components(
+        self, entity_id: UUID, *components: Type[Component]
+    ) -> List[Component]:
+        """Get a list of components correlating to an entity
+
+        :param entity_id: id of the target entity
+        :param *components: components to collect in the proxy
+        :raises KeyError: Unknown entity id
+        :return: a list filled with the request components
+        """
+        if entity_id not in self._entities:
+            raise KeyError(f"Unknown entity id {entity_id}")
+        return [self._get_component(entity_id, component) for component in components]
+
+    def _get_component(self, entity_id: UUID, component: Type[Component]) -> Component:
+        """Get a component from an entity
+
+        :param entity_id: id of the target entity
+        :param component: component type to get
+        :raises TypeError: Unknown component type
+        :raises KeyError: Entity doesn't have a component of that type
+        :return: the requested component
+        """
+        component_type = component.type()
+        if component_type not in self._components:
+            raise TypeError(f"Unknown component type {component_type}")
+        elif component_type not in self._entities[entity_id]:
+            raise KeyError(
+                f"Entity {entity_id} doesn't have a component of type {component_type}"
+            )
+        return self._components[component_type][entity_id]
+
+    def delete_components(
+        self, entity_id: UUID, *component_types: Type[Component], instant: bool = False
+    ):
         """Delete components from an entity
 
         :param entity_id: entity to delete component from
         :param *components: components to delete from the entity
+        :param instant: delete immediately instead of queueing deletion, defaults to False
         :raises KeyError: Unknown entity id
         :raises TypeError: Unknown component type
         :raises KeyError: Entity already has component of that type
@@ -151,10 +203,10 @@ class ECSController:
                 raise KeyError(
                     f"Entity {entity_id} doesn't have a component of type {component_type_}"
                 )
-            if self.delay_cleanup:
-                self._to_be_delete[1].append((entity_id, component_type_))
-            else:
+            if instant:
                 self._delete_component(entity_id, component_type_)
+            else:
+                self._to_be_delete[1].append((entity_id, component_type_))
 
     def _delete_component(self, entity_id: UUID, component_type: str):
         """Actually delete a component from an entity
@@ -211,39 +263,49 @@ class ECSController:
     def _do_cleanup(self):
         """Do cleanup that was cached so far."""
         entity_deletions, component_deletions = self._to_be_delete
-        for entity_id in entity_deletions:
-            self._delete_entity(entity_id)
         for entity_id, component_type in component_deletions:
             self._delete_component(entity_id, component_type)
+        for entity_id in entity_deletions:
+            self._delete_entity(entity_id)
         self._to_be_delete = (list(), list())  # type: ignore
 
     def run(self):
+        """Run the controller"""
         start = time()
         while True:
-            delta_t = start - time()
-            start = time()
             try:
+                delta_t = time() - start
+                start = time()
                 self._run_systems(delta_t)
             except Quit:
                 break
+            else:
+                self._do_cleanup()
 
     def _run_systems(self, delta_t: float):
+        """Run all systems.
+
+        :param delta_t: time difference since last execution
+        """
         for group in sorted(self._system_groups.keys()):
             for system in self._system_groups[group]:
                 self._run_system(system, delta_t)
 
     def _run_system(self, name: str, delta_t: float):
+        """Run a single system
+
+        :param name: name of the system to run
+        :param delta_t: time difference since last execution
+        """
         func, target_components, entity_cache = self._systems[name]
         if target_components:
             entities = [
-                tuple(
-                    [
-                        entity_id,
-                        *[
-                            self._components[target_component][entity_id]
-                            for target_component in target_components
-                        ],
-                    ]
+                self.get_entity(
+                    entity_id,
+                    *[
+                        _COMPONENT_REGISTRY_REV[target_component]
+                        for target_component in target_components
+                    ],
                 )
                 for entity_id in entity_cache
             ]
@@ -253,13 +315,40 @@ class ECSController:
 
 
 _COMPONENT_REGISTRY: Dict[Type[Component], str] = dict()
+_COMPONENT_REGISTRY_REV: Dict[str, Type[Component]] = dict()
 
 
 class Component:
     def __init_subclass__(cls, identifier: Optional[str] = None):
         super().__init_subclass__()
-        _COMPONENT_REGISTRY[cls] = identifier or cls.__name__
+        name = identifier or cls.__name__
+        _COMPONENT_REGISTRY[cls] = name
+        _COMPONENT_REGISTRY_REV[name] = cls
 
     @classmethod
     def type(cls) -> str:
         return _COMPONENT_REGISTRY[cls]
+
+
+@dataclass(repr=False)
+class EntityProxy:
+    _controller: ECSController
+    uuid: UUID
+    components: Dict[str, Component]
+
+    def delete(self):
+        self._controller.delete_entity(self.uuid)
+
+    def __getattribute__(self, name: str) -> Any:
+        components = object.__getattribute__(self, "components")
+        if name in components:
+            return components[name]
+        else:
+            return object.__getattribute__(self, name)
+
+    def __delattr__(self, name: str):
+        if name in self.components:
+            self._controller.delete_components(self.uuid, _COMPONENT_REGISTRY_REV[name])
+            del self.components[name]
+        else:
+            super().__delattr__(name)

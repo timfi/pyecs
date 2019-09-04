@@ -7,12 +7,18 @@ verify_ssl = true
 python_version = "3.7"
 
 [packages]
+pyecs = {editable = true,path = "."}
 
 [dev-packages]
-black = "==19.3b0"
+black = "*"
 flake8 = "*"
 isort = "*"
 mypy = "*"
 pre-commit = "*"
 pytest = "*"
 pytest-cov = "*"
+twine = "*"
+setuptools = "*"
+
+[pipenv]
+allow_prereleases = true

@@ -1,7 +1,8 @@
-from typing import Callable, Optional, Dict, Tuple, Type, List, Any
+from typing import Any, Callable, Dict, List, Optional, Tuple, Type
+from uuid import UUID
 
-from ecs.core import ECSController, Component
-from ecs.components import Transform2D, Rigidbody2D
+from pyecs.components import Rigidbody2D, Transform2D
+from pyecs.core import Component, ECSController
 
 __all__ = ("register_system", "basic_physics2D")
 
@@ -34,8 +35,8 @@ def preregister_system(
 def basic_physics2D(
     delta_t: float,
     data: Dict[str, Any],
-    components: List[Tuple[Transform2D, Rigidbody2D]],
+    components: List[Tuple[UUID, Transform2D, Rigidbody2D]],
 ):
-    for transform, rigidbody in components:
+    for entity_id, transform, rigidbody in components:
         rigidbody.velocity += rigidbody.acceleration * delta_t
         transform.position += rigidbody.velocity * delta_t

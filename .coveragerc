@@ -1,5 +1,5 @@
 [run]
-source = ecs
+source = pyecs
 
 [report]
 exclude_lines =
