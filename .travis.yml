@@ -5,7 +5,7 @@ python:
 dist: xenial
 install:
   - pip install pipenv
-  - pipenv install --system --deploy --ignore-pipfile
+  - pipenv install --system --deploy --dev
   - pip install codecov
 script:
   - mypy
