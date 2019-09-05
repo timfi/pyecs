@@ -7,7 +7,6 @@ verify_ssl = true
 python_version = "3.7"
 
 [packages]
-pyxel = "*"
 pyecs = {editable = true,path = "."}
 
 [dev-packages]
