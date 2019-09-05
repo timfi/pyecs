@@ -6,7 +6,7 @@ from time import time
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type
 from uuid import UUID, uuid1
 
-__all__ = ("ECSController", "Component", "Quit")
+__all__ = ("ECSController", "Component", "Quit", "register_system")
 
 
 class Quit(Exception):
@@ -15,6 +15,8 @@ class Quit(Exception):
 
 @dataclass
 class ECSController:
+    """Controller that handles all the entity/component management and system dispatching."""
+
     _entities: Dict[UUID, List[str]] = field(init=False, default_factory=dict)
     _components: Dict[str, Dict[UUID, Component]] = field(
         init=False, default_factory=dict
@@ -223,6 +225,7 @@ class ECSController:
     def register_system(
         self,
         target_components: Tuple[Type[Component], ...] = tuple(),
+        *,
         name: Optional[str] = None,
         group: int = 0,
     ) -> Callable[[Callable], Callable]:
@@ -314,24 +317,10 @@ class ECSController:
             func(delta_t, self.data)
 
 
-_COMPONENT_REGISTRY: Dict[Type[Component], str] = dict()
-_COMPONENT_REGISTRY_REV: Dict[str, Type[Component]] = dict()
-
-
-class Component:
-    def __init_subclass__(cls, identifier: Optional[str] = None):
-        super().__init_subclass__()
-        name = identifier or cls.__name__
-        _COMPONENT_REGISTRY[cls] = name
-        _COMPONENT_REGISTRY_REV[name] = cls
-
-    @classmethod
-    def type(cls) -> str:
-        return _COMPONENT_REGISTRY[cls]
-
-
 @dataclass(repr=False)
 class EntityProxy:
+    """Proxy object that represents a subset the component list that defines an entity."""
+
     _controller: ECSController
     uuid: UUID
     components: Dict[str, Component]
@@ -352,3 +341,58 @@ class EntityProxy:
             del self.components[name]
         else:
             super().__delattr__(name)
+
+
+_COMPONENT_REGISTRY: Dict[Type[Component], str] = dict()
+_COMPONENT_REGISTRY_REV: Dict[str, Type[Component]] = dict()
+
+
+class Component:
+    def __init_subclass__(cls, identifier: Optional[str] = None):
+        super().__init_subclass__()
+        name = identifier or cls.__name__
+        _COMPONENT_REGISTRY[cls] = name
+        _COMPONENT_REGISTRY_REV[name] = cls
+
+    @classmethod
+    def type(cls) -> str:
+        return _COMPONENT_REGISTRY[cls]
+
+
+_SYSTEM_PREREGISTRY: Dict[
+    str, Tuple[Tuple[Type[Component], ...], Optional[str]]
+] = dict()
+
+
+def preconfigure_system(
+    target_components: Tuple[Type[Component], ...] = tuple(),
+    *,
+    name: Optional[str] = None,
+):
+    """Preconfigure a system for later registrations
+
+    :param target_components: components the system targets, defaults to empty tuple
+    :param name: name of the system, defaults to the name of the system function
+    """
+
+    def inner(func: Callable) -> Callable:
+        _SYSTEM_PREREGISTRY[func.__name__] = (target_components, name)
+        return func
+
+    return inner
+
+
+def register_system(controller: ECSController, system: Callable, group: int = 0):
+    """Register a preconfigured system with a controller
+
+    :param controller: the controller to register the system with
+    :param system: the preconfigured system to register
+    :param group: the system-group to register the system in, defaults to 0
+    :raises KeyError: Not a preconfigured system
+    """
+    if system.__name__ not in _SYSTEM_PREREGISTRY:
+        raise KeyError(
+            "'register_system' is only to be used with preconfigured systems, please use 'ECSController.register_system' instead."
+        )
+    target_components, name = _SYSTEM_PREREGISTRY[system.__name__]
+    controller.register_system(target_components, name=name, group=group)(system)

@@ -188,6 +188,27 @@ def test_systems():
     controller._run_system("system_ab", 2)
 
 
+@core.preconfigure_system()
+def empty_system(delta_t, data):
+    ...
+
+
+def test_prebuilt():
+    controller = core.ECSController()
+
+    core.register_system(controller, empty_system)
+
+    assert "empty_system" in controller._systems
+    assert 0 in controller._system_groups
+    assert "empty_system" in controller._system_groups[0]
+
+    def unregistered_system(delta_t, data, entities):
+        ...
+
+    with pytest.raises(KeyError):
+        core.register_system(controller, unregistered_system)
+
+
 def test_system_precalculation():
     controller = core.ECSController()
 

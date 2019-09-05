@@ -1,8 +1,8 @@
 __title__ = "pyecs"
 __description__ = "An implementation of the Entity-Component-System pattern."
 __url__ = "https://github.com/tim-fi/pyecs"
-__version__ = "0.1"
-__build__ = 0x000001
+__version__ = "0.2"
+__build__ = 0x000002
 __author__ = "Tim Fischer"
 __author_email__ = "tim.fischer98@hotmail.com"
 __license__ = "MIT"
