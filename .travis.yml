@@ -5,11 +5,11 @@ python:
 dist: xenial
 install:
   - pip install pipenv
-  - pipenv install --system --deploy --dev
+  - pipenv install --system --dev
   - pip install codecov
 script:
   - mypy
-  - pytest --cov-report term
+  - pytest --cov-report=xml --cov
   - flake8
 after_success:
   - codecov
