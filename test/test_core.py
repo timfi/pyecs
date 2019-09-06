@@ -80,7 +80,7 @@ def test_controller():
     class UnregisteredComponent(core.Component):
         ...
 
-    with pytest.raises(TypeError):
+    with pytest.raises(KeyError):
         # generate entity with unknown component type
         controller.add_entity(UnregisteredComponent())
 
@@ -96,7 +96,7 @@ def test_controller():
         # delete unknown entity
         controller.get_components(uuid_c, ComponentA)
 
-    with pytest.raises(TypeError):
+    with pytest.raises(KeyError):
         # get component of unknown type
         controller.get_components(uuid_a, UnregisteredComponent)
 
@@ -112,7 +112,7 @@ def test_controller():
         # delete component in unknown entity
         controller.delete_components(uuid_c, ComponentA)
 
-    with pytest.raises(TypeError):
+    with pytest.raises(KeyError):
         # delete component of unknown type
         controller.delete_components(uuid_a, UnregisteredComponent)
 
@@ -122,16 +122,19 @@ def test_controller():
 
 
 def test_persistant_data():
-    controller = core.ECSController()
 
     # Test persistant data on the controller
-    @controller.register_system()
+    @core.system()
     def system1(delta_t, data):
         data["last_delta_t"] = delta_t
 
-    @controller.register_system()
+    @core.system()
     def system2(delta_t, data):
         assert data["last_delta_t"] == delta_t
+
+    controller = core.ECSController()
+    controller.register_system(system1)
+    controller.register_system(system2)
 
     controller._run_system("system1", 0)
     assert "last_delta_t" in controller.data
@@ -140,9 +143,7 @@ def test_persistant_data():
 
 
 def test_systems():
-    controller = core.ECSController()
-
-    @controller.register_system((ComponentA,))
+    @core.system((ComponentA,))
     def system_a(delta_t, data, entities):
         # abuse delta_t to check if entities is of proper length
         assert len(entities) == delta_t
@@ -151,7 +152,7 @@ def test_systems():
         assert all("A" in entity.components for entity in entities)
         assert all(isinstance(entity.A, ComponentA) for entity in entities)
 
-    @controller.register_system((ComponentA, ComponentB))
+    @core.system((ComponentA, ComponentB))
     def system_ab(delta_t, data, entities):
         # abuse delta_t to check if entities is of proper length
         assert len(entities) == delta_t
@@ -163,6 +164,16 @@ def test_systems():
             isinstance(entity.A, ComponentA) and isinstance(entity.B, ComponentB)
             for entity in entities
         )
+
+    controller = core.ECSController()
+    controller.register_system(system_a)
+    controller.register_system(system_ab)
+
+    def unknown_system(delta_t, data, entities):
+        ...
+
+    with pytest.raises(KeyError):
+        controller.register_system(unknown_system)
 
     controller._run_system("system_a", 0)
     controller._run_system("system_ab", 0)
@@ -188,56 +199,49 @@ def test_systems():
     controller._run_system("system_ab", 2)
 
 
-@core.preconfigure_system()
-def empty_system(delta_t, data):
-    ...
-
-
-def test_prebuilt():
-    controller = core.ECSController()
-
-    core.register_system(controller, empty_system)
-
-    assert "empty_system" in controller._systems
-    assert 0 in controller._system_groups
-    assert "empty_system" in controller._system_groups[0]
-
-    def unregistered_system(delta_t, data, entities):
-        ...
-
-    with pytest.raises(KeyError):
-        core.register_system(controller, unregistered_system)
-
-
 def test_system_precalculation():
     controller = core.ECSController()
-
     uuid = controller.add_entity(ComponentA())
 
-    @controller.register_system((ComponentA,))
-    def system(delta_t, data, entities):
+    @core.system((ComponentA,))
+    def test_system(delta_t, data, entities):
         assert len(entities) == 1
         assert entities[0].uuid == uuid
 
-    controller._run_system("system", 0)
+    controller.register_system(test_system)
+    controller._run_system("test_system", 0)
 
 
 def test_quit_exception():
-    controller = core.ECSController()
-    controller["tick"] = 0
-
-    @controller.register_system()
+    @core.system()
     def quit_timeout(delta_t, data):
         data["tick"] += 1
         if data["tick"] == 4:
             raise core.Quit
+
+    controller = core.ECSController()
+    controller.register_system(quit_timeout)
+    controller["tick"] = 0
 
     controller.run()
     assert controller["tick"] == 4
 
 
 def test_automatic_cleanup():
+    @core.system((ComponentA, ComponentB))
+    def delete_system(delta_t, data, entities):
+        if len(entities) > 0:
+            for entity in entities:
+                del entity.A
+                entity.delete()
+                del entity.uuid
+                assert not hasattr(entity, "uuid")
+
+        else:
+            raise core.Quit()
+
     controller = core.ECSController()
+    controller.register_system(delete_system)
 
     uuid = controller.add_entity(ComponentA(), ComponentB())
     controller.delete_components(uuid, ComponentB)
@@ -256,18 +260,6 @@ def test_automatic_cleanup():
     assert uuid not in controller._entities
     assert uuid not in controller._components["A"]
     assert uuid not in controller._components["B"]
-
-    @controller.register_system((ComponentA, ComponentB))
-    def delete_system(delta_t, data, entities):
-        if len(entities) > 0:
-            for entity in entities:
-                del entity.A
-                entity.delete()
-                del entity.uuid
-                assert not hasattr(entity, "uuid")
-
-        else:
-            raise core.Quit()
 
     controller.add_entity(ComponentA(), ComponentB())
     controller.run()

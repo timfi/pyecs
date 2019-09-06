@@ -21,7 +21,7 @@ pip install pyecs
 from dataclasses import dataclass
 from typing import Tuple
 
-from pyecs import ECSController, Component, preconfigure_system, register_system
+from pyecs import ECSController, Component, system
 
 # 1. build your components
 @dataclass
@@ -36,7 +36,7 @@ class Rigidbody(Component, identifier="rigidbody"):
 
 
 # 2. define some systems
-@preconfigure_system((Transform, Rigidbody))
+@system((Transform, Rigidbody))
 def physics(delta_t, data, entities):
     for entity in entities:
         entity.rigidbody.velocity = (
@@ -48,28 +48,27 @@ def physics(delta_t, data, entities):
             entity.transform.position[1] + entity.rigidbody.velocity[1] * delta_t,
         )
 
-@preconfigure_system((Transform,))
+
+@system((Transform,))
 def introspect_position(delta_t, data, entities):
+    if "tick" not in data:
+        data["tick"] = 0
+    print(f"Tick: {data['tick']}")
     for entity in entities:
-        print(f"Entity {entity.uuid}: position = {entity.transform.position}")
+        print(f" - Entity {entity.uuid}: position = {entity.transform.position}")
+    data["tick"] += 1
 
 
 if __name__ == "__main__":
     # 3. setup controller
     controller = ECSController()
-    register_system(controller, physics)
-    register_system(controller, introspect_position)
+    controller.register_system(physics)
+    controller.register_system(introspect_position)
 
     # 4. add some entities
-    controller.add_entity(
-        Transform(), Rigidbody(acceleration=(1.0, 0.0))
-    )
-    controller.add_entity(
-        Transform(), Rigidbody(acceleration=(0.0, 1.0))
-    )
-    controller.add_entity(
-        Transform(), Rigidbody(acceleration=(1.0, 1.0))
-    )
+    controller.add_entity(Transform(), Rigidbody(acceleration=(1.0, 0.0)))
+    controller.add_entity(Transform(), Rigidbody(acceleration=(0.0, 1.0)))
+    controller.add_entity(Transform(), Rigidbody(acceleration=(1.0, 1.0)))
 
     # 5. run everything
     controller.run()

@@ -1,8 +1,3 @@
-from pyecs.core import (  # noqa: F401
-    Component,
-    ECSController,
-    preconfigure_system,
-    register_system,
-)
+from pyecs.core import Component, ECSController, system  # noqa: F401
 
-__all__ = ("ECSController", "Component", "preconfigure_system", "register_system")
+__all__ = ("ECSController", "Component", "configure_system", "system")

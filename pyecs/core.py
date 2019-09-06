@@ -3,10 +3,10 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass, field
 from time import time
-from typing import Any, Callable, Dict, List, Optional, Tuple, Type
+from typing import Any, Callable, Dict, List, Optional, Tuple, Type, cast
 from uuid import UUID, uuid1
 
-__all__ = ("ECSController", "Component", "Quit", "register_system")
+__all__ = ("ECSController", "Component", "Quit", "system")
 
 
 class Quit(Exception):
@@ -124,14 +124,14 @@ class ECSController:
         :param entity_id: id of the entity to add the component to
         :param component: component to add to the entity
         :raises KeyError: Unknown entity id
-        :raises TypeError: Unknown component type
+        :raises KeyError: Unknown component type
         :raises KeyError: Entity already has component of that type
         """
         component_type = type(component).type()
         if entity_id not in self._entities:
             raise KeyError(f"Unknown entity id {entity_id}")
         elif component_type not in self._components:
-            raise TypeError(f"Unknown component type {component_type}")
+            raise KeyError(f"Unknown component type {component_type}")
         elif component_type in self._entities[entity_id]:
             raise KeyError(
                 f"Entity {entity_id} already has a component of type {component_type}"
@@ -170,13 +170,13 @@ class ECSController:
 
         :param entity_id: id of the target entity
         :param component: component type to get
-        :raises TypeError: Unknown component type
+        :raises KeyError: Unknown component type
         :raises KeyError: Entity doesn't have a component of that type
         :return: the requested component
         """
         component_type = component.type()
         if component_type not in self._components:
-            raise TypeError(f"Unknown component type {component_type}")
+            raise KeyError(f"Unknown component type {component_type}")
         elif component_type not in self._entities[entity_id]:
             raise KeyError(
                 f"Entity {entity_id} doesn't have a component of type {component_type}"
@@ -192,7 +192,7 @@ class ECSController:
         :param *components: components to delete from the entity
         :param instant: delete immediately instead of queueing deletion, defaults to False
         :raises KeyError: Unknown entity id
-        :raises TypeError: Unknown component type
+        :raises KeyError: Unknown component type
         :raises KeyError: Entity already has component of that type
         """
         if entity_id not in self._entities:
@@ -200,7 +200,7 @@ class ECSController:
         for component_type in component_types:
             component_type_ = component_type.type()
             if component_type_ not in self._components:
-                raise TypeError(f"Unknown component type {component_type_}")
+                raise KeyError(f"Unknown component type {component_type_}")
             elif component_type_ not in self._entities[entity_id]:
                 raise KeyError(
                     f"Entity {entity_id} doesn't have a component of type {component_type_}"
@@ -222,33 +222,26 @@ class ECSController:
             if component_type in target_components and entity_id in entity_cache:
                 del entity_cache[entity_cache.index(entity_id)]
 
-    def register_system(
-        self,
-        target_components: Tuple[Type[Component], ...] = tuple(),
-        *,
-        name: Optional[str] = None,
-        group: int = 0,
-    ) -> Callable[[Callable], Callable]:
+    def register_system(self, system: Callable, group: int = 0):
         """Register a system with the controller
 
-        :param target_components: components the system targets, defaults to empty tuple
-        :param name: name of the system, defaults to the name of the system function
+        :param system: the system to register with the controller
         :param group: group the system is part of, defaults to 0
+        :raises KeyError: Unknown component type
         :return: a decorator to wrap the system function
         """
-
-        def inner_register_system(func: Callable) -> Callable:
-            name_ = name or func.__name__
-            self._systems[name_] = (
-                func,
-                [component.type() for component in target_components],
-                list(),
-            )
-            self._system_groups[group].append(name_)
-            self._precalculate_system(name_)
-            return func
-
-        return inner_register_system
+        if system.__name__ not in _SYSTEM_PREREGISTRY:
+            raise KeyError(f"Unknown system {system.__qualname__}")
+        (target_components, name) = cast(
+            Tuple[List[Type[Component]], str], _SYSTEM_PREREGISTRY[system.__name__]
+        )
+        self._systems[name] = (
+            system,
+            [component.type() for component in target_components],
+            list(),
+        )
+        self._system_groups[group].append(name)
+        self._precalculate_system(name)
 
     def _precalculate_system(self, name: str):
         """Calculate the entity cache of a system
@@ -326,7 +319,16 @@ class EntityProxy:
     components: Dict[str, Component]
 
     def delete(self):
+        """Delete the entity linked with the proxy from the controller."""
         self._controller.delete_entity(self.uuid)
+
+    def add_component(self, component: Component):
+        """Add a component to the entity linked with this proxy.
+
+        :param component: component to add to the entity
+        """
+        self._controller.add_components(self.uuid, component)
+        self.components[type(component).type()] = component
 
     def __getattribute__(self, name: str) -> Any:
         components = object.__getattribute__(self, "components")
@@ -364,7 +366,7 @@ _SYSTEM_PREREGISTRY: Dict[
 ] = dict()
 
 
-def preconfigure_system(
+def system(
     target_components: Tuple[Type[Component], ...] = tuple(),
     *,
     name: Optional[str] = None,
@@ -376,23 +378,7 @@ def preconfigure_system(
     """
 
     def inner(func: Callable) -> Callable:
-        _SYSTEM_PREREGISTRY[func.__name__] = (target_components, name)
+        _SYSTEM_PREREGISTRY[func.__name__] = (target_components, name or func.__name__)
         return func
 
     return inner
-
-
-def register_system(controller: ECSController, system: Callable, group: int = 0):
-    """Register a preconfigured system with a controller
-
-    :param controller: the controller to register the system with
-    :param system: the preconfigured system to register
-    :param group: the system-group to register the system in, defaults to 0
-    :raises KeyError: Not a preconfigured system
-    """
-    if system.__name__ not in _SYSTEM_PREREGISTRY:
-        raise KeyError(
-            "'register_system' is only to be used with preconfigured systems, please use 'ECSController.register_system' instead."
-        )
-    target_components, name = _SYSTEM_PREREGISTRY[system.__name__]
-    controller.register_system(target_components, name=name, group=group)(system)
