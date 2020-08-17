@@ -22,7 +22,7 @@ pip install pyecs
 from dataclasses import dataclass
 from typing import Tuple
 
-from pyecs import ECSController
+from pyecs import ECSManager
 
 # 1. build your components
 @dataclass
@@ -37,7 +37,7 @@ class Rigidbody:
 
 
 # 2. define a system
-def physics(controller: ECSController):
+def physics(controller: ECSManager):
     for entity in controller.get_entities_with(Transform, Rigidbody):
         transform, rigidbody = entity.get_components(Transform, Rigidbody)
         rigidbody.velocity = (
@@ -53,7 +53,7 @@ def physics(controller: ECSController):
 
 if __name__ == "__main__":
     # 3. setup controller
-    controller = ECSController()
+    controller = ECSManager()
     controller.add_system(physics)
 
     # 4. add some entities
@@ -63,7 +63,7 @@ if __name__ == "__main__":
 
     # 5. run everything
     while True:
-        controller.tick()
+        controller.tick_systems()
 ```
 
 

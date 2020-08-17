@@ -1,3 +1,3 @@
-from . import core
+from .core import ECSManager, Entity
 
-__all__ = core.__all__
+__all__ = ("ECSManager", "Entity")
