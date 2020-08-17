@@ -1,384 +1,233 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass, field
-from time import time
-from typing import Any, Callable, Dict, List, Optional, Tuple, Type, cast
-from uuid import UUID, uuid1
+from functools import lru_cache
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Type, TypeVar
+from uuid import UUID
+from uuid import uuid4 as get_uuid
 
-__all__ = ("ECSController", "Component", "Quit", "system")
-
-
-class Quit(Exception):
-    ...
+__all__ = ("ECSManager", "Entity")
 
 
-@dataclass
-class ECSController:
-    """Controller that handles all the entity/component management and system dispatching."""
+C = TypeVar("C")
 
-    _entities: Dict[UUID, List[str]] = field(init=False, default_factory=dict)
-    _components: Dict[str, Dict[UUID, Component]] = field(
-        init=False, default_factory=dict
+
+class Entity:
+    __slots__ = ("_manager", "_uuid")
+    _manager: ECSManager
+    _uuid: UUID
+
+    def __init__(self, manager: ECSManager, uuid: UUID):
+        self._manager = manager
+        self._uuid = uuid
+
+    def __repr__(self) -> str:
+        return f"Entity(uuid={self._uuid})"
+
+    __str__ = __repr__
+
+    @property
+    def uuid(self):
+        """Identifier of this entity in the ECSManager."""
+        return self._uuid
+
+    def get_children(self) -> Tuple[Entity, ...]:
+        """Retrieve child entities."""
+        return self._manager.get_children(self.uuid)
+
+    def get_parent(self) -> Optional[Entity]:
+        """Retrieve parent entity."""
+        return self._manager.get_parent(self.uuid)
+
+    def add_components(self, *components: Any):
+        """Add components to entity."""
+        self._manager.add_components(self.uuid, *components)
+
+    def get_component(self, c_type: Type[C]) -> C:
+        """Get component from entity."""
+        return self._manager.get_component(self.uuid, c_type)
+
+    def get_components(self, *c_types: type) -> Tuple[Any, ...]:
+        """Get components from entity."""
+        return self._manager.get_components(self.uuid, *c_types)
+
+    def remove_components(self, *c_types: type):
+        """Remove component from entity."""
+        self._manager.remove_components(self.uuid, *c_types)
+
+    def remove(self):
+        """Remove entity from ECSManager."""
+        self._manager.remove_entity(self.uuid)
+
+    def __eq__(self, other: Any) -> bool:
+        return isinstance(other, Entity) and self.uuid == other.uuid
+
+
+class ECSManager:
+    __slots__ = (
+        "entities",
+        "entity_hirarchy",
+        "entity_hirarchy_rev",
+        "components",
+        "systems",
+        "system_groups",
+        "misc_cache",
     )
-    _systems: Dict[str, Tuple[Callable, List[str], List[UUID]]] = field(
-        init=False, default_factory=dict
-    )
-    _system_groups: Dict[int, List[str]] = field(
-        init=False, default_factory=lambda: defaultdict(list)
-    )
-    _to_be_delete: Tuple[List[UUID], List[Tuple[UUID, str]]] = field(  # type: ignore
-        init=False, default=(list(), list())
-    )
-    _last_update: float = field(init=False, default_factory=time)
-    data: Dict[str, Any] = field(init=False, default_factory=dict)
-    time_per_cycle: float = 1 / 60
 
-    def __post_init__(self):
-        for component_type in _COMPONENT_REGISTRY:
-            self._components[component_type.type()] = dict()
+    entities: Dict[UUID, Set[str]]
+    entity_hirarchy: Dict[UUID, Set[UUID]]
+    entity_hirarchy_rev: Dict[UUID, Optional[UUID]]
+    components: Dict[str, Dict[UUID, Any]]
+    systems: List[Callable[[ECSManager], None]]
+    system_groups: Dict[int, List[int]]
+    misc_cache: Dict[str, Any]
 
-    def __getitem__(self, key: str) -> Any:
-        return self.data[key]
+    def __init__(self):
+        self.entities = {}
+        self.entity_hirarchy = {}
+        self.entity_hirarchy_rev = {}
+        self.components = defaultdict(dict)
+        self.systems = []
+        self.system_groups = defaultdict(list)
+        self.misc_cache = {}
 
-    def __setitem__(self, key: str, value: Any):
-        self.data[key] = value
+    def clear_cache(self):
+        """Clear LRU and misc caches."""
+        self.get_component.cache_clear()
+        self.get_components.cache_clear()
+        self.get_entity.cache_clear()
+        self.get_entities_with.cache_clear()
+        self.get_unpacked_entities_with.cache_clear()
+        self.get_children.cache_clear()
+        self.get_parent.cache_clear()
+        self.misc_cache.clear()
 
-    def add_entity(self, *components: Component) -> UUID:
-        """Add a single entity to the controller.
+    def clear(self):
+        """Delete all data."""
+        self.clear_cache()
+        self.entities.clear()
+        self.entity_hirarchy.clear()
+        self.entity_hirarchy_rev.clear()
+        self.components.clear()
+        self.system_groups.clear()
+        self.systems = []
 
-        *Public interface for `_add_entity`*
+    def add_entity(
+        self,
+        *components: Any,
+        parent: Optional[Entity] = None,
+        uuid: Optional[UUID] = None,
+    ) -> Entity:
+        if uuid and uuid in self.entities:
+            raise KeyError("Entity uuid collision.")
+        uuid = uuid or get_uuid()
 
-        :param *components: components to add to the entity
-        :return: entity id
-        """
-        entity_id = self._add_entity()
-        self.add_components(entity_id, *components)
-        return entity_id
-
-    def _add_entity(self) -> UUID:
-        """Generate a unique entity id and setup component type cache for it.
-
-        :return: entity id
-        """
-        entity_id = uuid1()
-        self._entities[entity_id] = []
-        return entity_id
-
-    def get_entity(self, entity_id: UUID, *components: Type[Component]) -> EntityProxy:
-        """Get an entity proxy correlating to an entity and some of its components
-
-        :param entity_id: id of the target entity
-        :param *components: components to collect in the proxy
-        :raises KeyError: Unknown entity id
-        :return: an entity proxy populated with the given components
-        """
-        return EntityProxy(
-            uuid=entity_id,
-            components=dict(
-                zip(
-                    [component.type() for component in components],
-                    self.get_components(entity_id, *components),
-                )
-            ),
-            _controller=self,
-        )
-
-    def delete_entity(self, entity_id: UUID, *, instant: bool = False):
-        """Delete an entity from the controller.
-
-        :param entity_id: entity to delete
-        :param instant: delete immediately instead of queueing deletion, defaults to False
-        :raises KeyError: Unknown entity id
-        """
-        if entity_id not in self._entities:
-            raise KeyError(f"Unknown entity id {entity_id}")
-        if instant:
-            self._delete_entity(entity_id)
+        self.entity_hirarchy[uuid] = set()
+        if parent is not None:
+            self.entity_hirarchy[parent.uuid] |= {uuid}
+            self.entity_hirarchy_rev[uuid] = parent.uuid
         else:
-            self._to_be_delete[0].append(entity_id)
+            self.entity_hirarchy_rev[uuid] = None
 
-    def _delete_entity(self, entity_id: UUID):
-        """Actually delete an entity from the controller
+        self.entities[uuid] = set()
+        self.add_components(uuid, *components)
+        return Entity(self, uuid)
 
-        :param entity_id: entity to delete
-        """
-        for component_type in self._entities[entity_id]:
-            self._delete_component(entity_id, component_type)
-        del self._entities[entity_id]
-
-    def add_components(self, entity_id: UUID, *components: Component):
-        """Add components to an existing entity.
-
-        *Public interface for `_add_component`*
-
-        :param entity_id: id of the entity to add the components to
-        :param *components: components to add to the entity
-        """
+    def add_components(self, uuid: UUID, *components: Any):
         for component in components:
-            self._add_component(entity_id, component)
+            c_name = type(component).__qualname__
+            self.entities[uuid] |= {c_name}
+            self.components[c_name][uuid] = component
 
-    def _add_component(self, entity_id: UUID, component: Component):
-        """Add a component to an existing entity.
+        self.clear_cache()
 
-        :param entity_id: id of the entity to add the component to
-        :param component: component to add to the entity
-        :raises KeyError: Unknown entity id
-        :raises KeyError: Unknown component type
-        :raises KeyError: Entity already has component of that type
-        """
-        component_type = type(component).type()
-        if entity_id not in self._entities:
-            raise KeyError(f"Unknown entity id {entity_id}")
-        elif component_type not in self._components:
-            raise KeyError(f"Unknown component type {component_type}")
-        elif component_type in self._entities[entity_id]:
-            raise KeyError(
-                f"Entity {entity_id} already has a component of type {component_type}"
+    @lru_cache
+    def get_component(self, uuid: UUID, c_type: Type[C]) -> C:
+        return self.components[c_type.__qualname__][uuid]  # type: ignore
+
+    @lru_cache
+    def get_components(self, uuid: UUID, *c_types: type) -> Tuple[Any, ...]:
+        if c_types:
+            return tuple(self.get_component(uuid, c_type) for c_type in c_types)
+        else:
+            return tuple(
+                self.components[c_name][uuid] for c_name in self.entities[uuid]
             )
-        self._entities[entity_id].append(component_type)
-        self._components[component_type][entity_id] = component
 
-        # calculate which systems will access the entity based on the change
-        for _, target_components, entity_cache in self._systems.values():
-            if (
-                entity_id not in entity_cache
-                and component_type in target_components
-                and all(
-                    target_component in self._entities[entity_id]
-                    for target_component in target_components
-                )
-            ):
-                entity_cache.append(entity_id)
+    @lru_cache
+    def get_entity(self, uuid: UUID) -> Entity:
+        if uuid in self.entities:
+            return Entity(self, uuid)
+        else:
+            raise KeyError("Unknown entity id.")
 
-    def get_components(
-        self, entity_id: UUID, *components: Type[Component]
-    ) -> List[Component]:
-        """Get a list of components correlating to an entity
-
-        :param entity_id: id of the target entity
-        :param *components: components to collect in the proxy
-        :raises KeyError: Unknown entity id
-        :return: a list filled with the request components
-        """
-        if entity_id not in self._entities:
-            raise KeyError(f"Unknown entity id {entity_id}")
-        return [self._get_component(entity_id, component) for component in components]
-
-    def _get_component(self, entity_id: UUID, component: Type[Component]) -> Component:
-        """Get a component from an entity
-
-        :param entity_id: id of the target entity
-        :param component: component type to get
-        :raises KeyError: Unknown component type
-        :raises KeyError: Entity doesn't have a component of that type
-        :return: the requested component
-        """
-        component_type = component.type()
-        if component_type not in self._components:
-            raise KeyError(f"Unknown component type {component_type}")
-        elif component_type not in self._entities[entity_id]:
-            raise KeyError(
-                f"Entity {entity_id} doesn't have a component of type {component_type}"
-            )
-        return self._components[component_type][entity_id]
-
-    def delete_components(
-        self, entity_id: UUID, *component_types: Type[Component], instant: bool = False
-    ):
-        """Delete components from an entity
-
-        :param entity_id: entity to delete component from
-        :param *components: components to delete from the entity
-        :param instant: delete immediately instead of queueing deletion, defaults to False
-        :raises KeyError: Unknown entity id
-        :raises KeyError: Unknown component type
-        :raises KeyError: Entity already has component of that type
-        """
-        if entity_id not in self._entities:
-            raise KeyError(f"Unknown entity id {entity_id}")
-        for component_type in component_types:
-            component_type_ = component_type.type()
-            if component_type_ not in self._components:
-                raise KeyError(f"Unknown component type {component_type_}")
-            elif component_type_ not in self._entities[entity_id]:
-                raise KeyError(
-                    f"Entity {entity_id} doesn't have a component of type {component_type_}"
-                )
-            if instant:
-                self._delete_component(entity_id, component_type_)
-            else:
-                self._to_be_delete[1].append((entity_id, component_type_))
-
-    def _delete_component(self, entity_id: UUID, component_type: str):
-        """Actually delete a component from an entity
-
-        :param entity_id: entity to delete component from
-        :param component: component to delete to the entity
-        """
-        del self._components[component_type][entity_id]
-        del self._entities[entity_id][self._entities[entity_id].index(component_type)]
-        for _, target_components, entity_cache in self._systems.values():
-            if component_type in target_components and entity_id in entity_cache:
-                del entity_cache[entity_cache.index(entity_id)]
-
-    def register_system(self, system: Callable, group: int = 0):
-        """Register a system with the controller
-
-        :param system: the system to register with the controller
-        :param group: group the system is part of, defaults to 0
-        :raises KeyError: Unknown component type
-        :return: a decorator to wrap the system function
-        """
-        if system.__name__ not in _SYSTEM_PREREGISTRY:
-            raise KeyError(f"Unknown system {system.__qualname__}")
-        (target_components, name) = cast(
-            Tuple[List[Type[Component]], str], _SYSTEM_PREREGISTRY[system.__name__]
+    @lru_cache
+    def get_entities_with(self, *c_types: type) -> Tuple[Entity, ...]:
+        target_c_names = {c_type.__qualname__ for c_type in c_types}
+        return tuple(
+            self.get_entity(uuid)
+            for uuid, c_names in self.entities.items()
+            if target_c_names <= c_names
         )
-        self._systems[name] = (
-            system,
-            [component.type() for component in target_components],
-            list(),
+
+    @lru_cache
+    def get_unpacked_entities_with(self, *c_types: type) -> Tuple[Tuple[Any, ...], ...]:
+        target_c_names = {c_type.__qualname__ for c_type in c_types}
+        return tuple(
+            tuple(self.get_component(uuid, c_type) for c_type in c_types)
+            for uuid, c_names in self.entities.items()
+            if target_c_names <= c_names
         )
-        self._system_groups[group].append(name)
-        self._precalculate_system(name)
 
-    def _precalculate_system(self, name: str):
-        """Calculate the entity cache of a system
+    @lru_cache
+    def get_children(self, uuid: UUID) -> Tuple[Entity, ...]:
+        return tuple(Entity(self, c_uuid) for c_uuid in self.entity_hirarchy[uuid])
 
-        :param name: system to calculate the cache for
-        """
-        _, target_components, entity_cache = self._systems[name]
-        for entity_id, component_types in self._entities.items():
-            if entity_id not in entity_cache and all(
-                target_component in component_types
-                for target_component in target_components
-            ):
-                entity_cache.append(entity_id)
+    @lru_cache
+    def get_parent(self, uuid: UUID) -> Optional[Entity]:
+        return (
+            Entity(self, p_uuid)
+            if (p_uuid := self.entity_hirarchy_rev.get(uuid))
+            else None
+        )
 
-    def _do_cleanup(self):
-        """Do cleanup that was cached so far."""
-        entity_deletions, component_deletions = self._to_be_delete
-        for entity_id, component_type in component_deletions:
-            self._delete_component(entity_id, component_type)
-        for entity_id in entity_deletions:
-            self._delete_entity(entity_id)
-        self._to_be_delete = (list(), list())  # type: ignore
+    def remove_components(self, uuid: UUID, *c_types: type):
+        self.entities[uuid] -= {c_type.__qualname__ for c_type in c_types}
+        for c_type in c_types:
+            del self.components[c_type.__qualname__][uuid]
+        self.clear_cache()
 
-    def run(self):
-        """Run the controller"""
-        start = time()
-        while True:
-            try:
-                delta_t = time() - start
-                start = time()
-                self._run_systems(delta_t)
-            except Quit:
-                break
-            else:
-                self._do_cleanup()
+    def remove_entity(self, uuid: UUID):
+        for c_name in self.entities.pop(uuid, ()):
+            del self.components[c_name][uuid]
 
-    def _run_systems(self, delta_t: float):
-        """Run all systems.
+        if (p_uuid := self.entity_hirarchy_rev.pop(uuid)) :
+            self.entity_hirarchy[p_uuid] -= {uuid}
 
-        :param delta_t: time difference since last execution
-        """
-        for group in sorted(self._system_groups.keys()):
-            for system in self._system_groups[group]:
-                self._run_system(system, delta_t)
+        for c_uuid in [*self.entity_hirarchy[uuid]]:
+            self.remove_entity(c_uuid)
 
-    def _run_system(self, name: str, delta_t: float):
-        """Run a single system
+        del self.entity_hirarchy[uuid]
 
-        :param name: name of the system to run
-        :param delta_t: time difference since last execution
-        """
-        func, target_components, entity_cache = self._systems[name]
-        if target_components:
-            entities = [
-                self.get_entity(
-                    entity_id,
-                    *[
-                        _COMPONENT_REGISTRY_REV[target_component]
-                        for target_component in target_components
-                    ],
-                )
-                for entity_id in entity_cache
-            ]
-            func(delta_t, self.data, entities)
-        else:
-            func(delta_t, self.data)
+        self.clear_cache()
 
+    def add_system(self, sys: Callable[[ECSManager], None], *, group: int = 0):
+        self.systems.append(sys)
+        self.system_groups[group].append(len(self.systems) - 1)
 
-@dataclass(repr=False)
-class EntityProxy:
-    """Proxy object that represents a subset the component list that defines an entity."""
+    def add_systems(self, *sys: Callable[[ECSManager], None], group: int = 0):
+        for s in sys:
+            self.add_system(s, group=group)
 
-    _controller: ECSController
-    uuid: UUID
-    components: Dict[str, Component]
+    def tick_systems(self, *, group: Optional[int] = None):
+        systems = (
+            self.systems
+            if group is None
+            else (self.systems[sys_id] for sys_id in self.system_groups[group])
+        )
 
-    def delete(self):
-        """Delete the entity linked with the proxy from the controller."""
-        self._controller.delete_entity(self.uuid)
+        for system in systems:
+            system(self)
 
-    def add_component(self, component: Component):
-        """Add a component to the entity linked with this proxy.
-
-        :param component: component to add to the entity
-        """
-        self._controller.add_components(self.uuid, component)
-        self.components[type(component).type()] = component
-
-    def __getattribute__(self, name: str) -> Any:
-        components = object.__getattribute__(self, "components")
-        if name in components:
-            return components[name]
-        else:
-            return object.__getattribute__(self, name)
-
-    def __delattr__(self, name: str):
-        if name in self.components:
-            self._controller.delete_components(self.uuid, _COMPONENT_REGISTRY_REV[name])
-            del self.components[name]
-        else:
-            super().__delattr__(name)
-
-
-_COMPONENT_REGISTRY: Dict[Type[Component], str] = dict()
-_COMPONENT_REGISTRY_REV: Dict[str, Type[Component]] = dict()
-
-
-class Component:
-    def __init_subclass__(cls, identifier: Optional[str] = None):
-        super().__init_subclass__()
-        name = identifier or cls.__name__
-        _COMPONENT_REGISTRY[cls] = name
-        _COMPONENT_REGISTRY_REV[name] = cls
-
-    @classmethod
-    def type(cls) -> str:
-        return _COMPONENT_REGISTRY[cls]
-
-
-_SYSTEM_PREREGISTRY: Dict[
-    str, Tuple[Tuple[Type[Component], ...], Optional[str]]
-] = dict()
-
-
-def system(
-    target_components: Tuple[Type[Component], ...] = tuple(),
-    *,
-    name: Optional[str] = None,
-):
-    """Preconfigure a system for later registrations
-
-    :param target_components: components the system targets, defaults to empty tuple
-    :param name: name of the system, defaults to the name of the system function
-    """
-
-    def inner(func: Callable) -> Callable:
-        _SYSTEM_PREREGISTRY[func.__name__] = (target_components, name or func.__name__)
-        return func
-
-    return inner
+    def __hash__(self):
+        return id(self)

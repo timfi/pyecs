@@ -22,49 +22,39 @@ pip install pyecs
 from dataclasses import dataclass
 from typing import Tuple
 
-from pyecs import ECSController, Component, system
+from pyecs import ECSController
 
 # 1. build your components
 @dataclass
-class Transform(Component, identifier="transform"):
+class Transform:
     position: Tuple[float, float] = (0.0, 0.0)
 
 
 @dataclass
-class Rigidbody(Component, identifier="rigidbody"):
+class Rigidbody:
     velocity: Tuple[float, float] = (0.0, 0.0)
     acceleration: Tuple[float, float] = (0.0, 0.0)
 
 
-# 2. define some systems
-@system((Transform, Rigidbody))
-def physics(delta_t, data, entities):
-    for entity in entities:
-        entity.rigidbody.velocity = (
-            entity.rigidbody.velocity[0] + entity.rigidbody.acceleration[0] * delta_t,
-            entity.rigidbody.velocity[1] + entity.rigidbody.acceleration[1] * delta_t,
+# 2. define a system
+def physics(controller: ECSController):
+    for entity in controller.get_entities_with(Transform, Rigidbody):
+        transform, rigidbody = entity.get_components(Transform, Rigidbody)
+        rigidbody.velocity = (
+            rigidbody.velocity[0] + rigidbody.acceleration[0],
+            rigidbody.velocity[1] + rigidbody.acceleration[1],
         )
-        entity.transform.position = (
-            entity.transform.position[0] + entity.rigidbody.velocity[0] * delta_t,
-            entity.transform.position[1] + entity.rigidbody.velocity[1] * delta_t,
+        transform.position = (
+            transform.position[0] + rigidbody.velocity[0],
+            transform.position[1] + rigidbody.velocity[1],
         )
-
-
-@system((Transform,))
-def introspect_position(delta_t, data, entities):
-    if "tick" not in data:
-        data["tick"] = 0
-    print(f"Tick: {data['tick']}")
-    for entity in entities:
-        print(f" - Entity {entity.uuid}: position = {entity.transform.position}")
-    data["tick"] += 1
+        print(f"{transform=}\t{rigidbody=}")
 
 
 if __name__ == "__main__":
     # 3. setup controller
     controller = ECSController()
-    controller.register_system(physics)
-    controller.register_system(introspect_position)
+    controller.add_system(physics)
 
     # 4. add some entities
     controller.add_entity(Transform(), Rigidbody(acceleration=(1.0, 0.0)))
@@ -72,7 +62,8 @@ if __name__ == "__main__":
     controller.add_entity(Transform(), Rigidbody(acceleration=(1.0, 1.0)))
 
     # 5. run everything
-    controller.run()
+    while True:
+        controller.tick()
 ```
 
 
