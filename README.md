@@ -1,5 +1,5 @@
 # pyecs
-_An implementation of the Entity-Component-System pattern._
+_A simple implementation of the Entity-Component pattern._
 
 [![PyPI](https://img.shields.io/pypi/v/pyecs)](https://pypi.org/project/pyecs)
 [![PyPI - Status](https://img.shields.io/pypi/status/pyecs)](https://pypi.org/project/pyecs)
@@ -22,7 +22,7 @@ pip install pyecs
 from dataclasses import dataclass
 from typing import Tuple
 
-from pyecs import ECSManager
+from pyecs import ECController
 
 # 1. build your components
 @dataclass
@@ -36,34 +36,28 @@ class Rigidbody:
     acceleration: Tuple[float, float] = (0.0, 0.0)
 
 
-# 2. define a system
-def physics(controller: ECSManager):
-    for entity in controller.get_entities_with(Transform, Rigidbody):
-        transform, rigidbody = entity.get_components(Transform, Rigidbody)
-        rigidbody.velocity = (
-            rigidbody.velocity[0] + rigidbody.acceleration[0],
-            rigidbody.velocity[1] + rigidbody.acceleration[1],
-        )
-        transform.position = (
-            transform.position[0] + rigidbody.velocity[0],
-            transform.position[1] + rigidbody.velocity[1],
-        )
-        print(f"{transform=}\t{rigidbody=}")
-
-
 if __name__ == "__main__":
-    # 3. setup controller
-    controller = ECSManager()
-    controller.add_system(physics)
+    # 2. intialize controller
+    controller = ECController()
 
-    # 4. add some entities
+    # 3. add some entities
     controller.add_entity(Transform(), Rigidbody(acceleration=(1.0, 0.0)))
     controller.add_entity(Transform(), Rigidbody(acceleration=(0.0, 1.0)))
     controller.add_entity(Transform(), Rigidbody(acceleration=(1.0, 1.0)))
 
-    # 5. run everything
+    # 4. run everything
     while True:
-        controller.tick_systems()
+        for entity in controller.get_entities_with(Transform, Rigidbody):
+            transform, rigidbody = entity.get_components(Transform, Rigidbody)
+            rigidbody.velocity = (
+                rigidbody.velocity[0] + rigidbody.acceleration[0],
+                rigidbody.velocity[1] + rigidbody.acceleration[1],
+            )
+            transform.position = (
+                transform.position[0] + rigidbody.velocity[0],
+                transform.position[1] + rigidbody.velocity[1],
+            )
+            print(f"{transform=}\t{rigidbody=}")
 ```
 
 

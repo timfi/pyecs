@@ -1,3 +1,3 @@
-from .core import ECSManager, Entity
+from .core import ECController, Entity
 
-__all__ = ("ECSManager", "Entity")
+__all__ = ("ECController", "Entity")

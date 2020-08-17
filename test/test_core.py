@@ -14,7 +14,7 @@ class ComponentB:
 
 
 def test_entity_component_workflow():
-    controller = core.ECSManager()
+    controller = core.ECController()
 
     ca = ComponentA()
     e = controller.add_entity(ca)
@@ -61,6 +61,12 @@ def test_entity_component_workflow():
     assert _e1 == _e2
     assert _e2 == _e3
 
+    _c1, _c2 = controller.get_unpacked_entities_with(ComponentA, ComponentB)[0]
+    assert _c1 == ca and _c2 == cb
+
+    _c1, _c2 = controller.get_unpacked_entities_with(ComponentB, ComponentA)[0]
+    assert _c1 == cb and _c2 == ca
+
     e.remove_components(ComponentA)
 
     with pytest.raises(KeyError):
@@ -82,26 +88,8 @@ def test_entity_component_workflow():
     controller.clear()
 
 
-def test_system_workflow():
-    controller = core.ECSManager()
-
-    c = ComponentA()
-    e = controller.add_entity(c)
-
-    def system(con):
-        for _e in con.get_entities_with(ComponentA):
-            assert _e == e
-            assert c == _e.get_component(ComponentA)
-
-        for (_c,) in con.get_unpacked_entities_with(ComponentA):
-            assert _c == c
-
-    controller.add_systems(system, group="a")
-    controller.tick_systems(group="a")
-
-
 def test_entity_tree():
-    controller = core.ECSManager()
+    controller = core.ECController()
 
     p = controller.add_entity()
     e = controller.add_entity(parent=p)

@@ -2,23 +2,23 @@ from __future__ import annotations
 
 from collections import defaultdict
 from functools import lru_cache
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Type, TypeVar
+from typing import Any, Dict, Optional, Set, Tuple, Type, TypeVar
 from uuid import UUID
 from uuid import uuid4 as get_uuid
 
-__all__ = ("ECSManager", "Entity")
+__all__ = ("ECController", "Entity")
 
 
 C = TypeVar("C")
 
 
 class Entity:
-    __slots__ = ("_manager", "_uuid")
-    _manager: ECSManager
+    __slots__ = ("_controller", "_uuid")
+    _controller: ECController
     _uuid: UUID
 
-    def __init__(self, manager: ECSManager, uuid: UUID):
-        self._manager = manager
+    def __init__(self, controller: ECController, uuid: UUID):
+        self._controller = controller
         self._uuid = uuid
 
     def __repr__(self) -> str:
@@ -28,68 +28,59 @@ class Entity:
 
     @property
     def uuid(self):
-        """Identifier of this entity in the ECSManager."""
+        """Identifier of this entity in the ECController."""
         return self._uuid
 
     def get_children(self) -> Tuple[Entity, ...]:
         """Retrieve child entities."""
-        return self._manager.get_children(self.uuid)
+        return self._controller.get_children(self.uuid)
 
     def get_parent(self) -> Optional[Entity]:
         """Retrieve parent entity."""
-        return self._manager.get_parent(self.uuid)
+        return self._controller.get_parent(self.uuid)
 
     def add_components(self, *components: Any):
         """Add components to entity."""
-        self._manager.add_components(self.uuid, *components)
+        self._controller.add_components(self.uuid, *components)
 
     def get_component(self, c_type: Type[C]) -> C:
         """Get component from entity."""
-        return self._manager.get_component(self.uuid, c_type)
+        return self._controller.get_component(self.uuid, c_type)
 
     def get_components(self, *c_types: type) -> Tuple[Any, ...]:
         """Get components from entity."""
-        return self._manager.get_components(self.uuid, *c_types)
+        return self._controller.get_components(self.uuid, *c_types)
 
     def remove_components(self, *c_types: type):
         """Remove component from entity."""
-        self._manager.remove_components(self.uuid, *c_types)
+        self._controller.remove_components(self.uuid, *c_types)
 
     def remove(self):
-        """Remove entity from ECSManager."""
-        self._manager.remove_entity(self.uuid)
+        """Remove entity from ECController."""
+        self._controller.remove_entity(self.uuid)
 
     def __eq__(self, other: Any) -> bool:
         return isinstance(other, Entity) and self.uuid == other.uuid
 
 
-class ECSManager:
+class ECController:
     __slots__ = (
         "entities",
         "entity_hirarchy",
         "entity_hirarchy_rev",
         "components",
-        "systems",
-        "system_groups",
-        "misc_cache",
     )
 
     entities: Dict[UUID, Set[str]]
     entity_hirarchy: Dict[UUID, Set[UUID]]
     entity_hirarchy_rev: Dict[UUID, Optional[UUID]]
     components: Dict[str, Dict[UUID, Any]]
-    systems: List[Callable[[ECSManager], None]]
-    system_groups: Dict[int, List[int]]
-    misc_cache: Dict[str, Any]
 
     def __init__(self):
         self.entities = {}
         self.entity_hirarchy = {}
         self.entity_hirarchy_rev = {}
         self.components = defaultdict(dict)
-        self.systems = []
-        self.system_groups = defaultdict(list)
-        self.misc_cache = {}
 
     def clear_cache(self):
         """Clear LRU and misc caches."""
@@ -100,7 +91,6 @@ class ECSManager:
         self.get_unpacked_entities_with.cache_clear()
         self.get_children.cache_clear()
         self.get_parent.cache_clear()
-        self.misc_cache.clear()
 
     def clear(self):
         """Delete all data."""
@@ -109,8 +99,6 @@ class ECSManager:
         self.entity_hirarchy.clear()
         self.entity_hirarchy_rev.clear()
         self.components.clear()
-        self.system_groups.clear()
-        self.systems = []
 
     def add_entity(
         self,
@@ -210,24 +198,6 @@ class ECSManager:
         del self.entity_hirarchy[uuid]
 
         self.clear_cache()
-
-    def add_system(self, sys: Callable[[ECSManager], None], *, group: int = 0):
-        self.systems.append(sys)
-        self.system_groups[group].append(len(self.systems) - 1)
-
-    def add_systems(self, *sys: Callable[[ECSManager], None], group: int = 0):
-        for s in sys:
-            self.add_system(s, group=group)
-
-    def tick_systems(self, *, group: Optional[int] = None):
-        systems = (
-            self.systems
-            if group is None
-            else (self.systems[sys_id] for sys_id in self.system_groups[group])
-        )
-
-        for system in systems:
-            system(self)
 
     def __hash__(self):
         return id(self)
