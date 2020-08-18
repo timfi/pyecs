@@ -6,7 +6,7 @@ _A simple implementation of the Entity-Component pattern._
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/pyecs)](https://pypi.org/project/pyecs)
 [![PyPI - License](https://img.shields.io/pypi/l/pyecs)](https://opensource.org/licenses/MIT)
 
-![Tests](https://github.com/tim-fi/pyecs/workflows/Tests/badge.svg?branch=master)
+[![Tests](https://github.com/tim-fi/pyecs/workflows/Tests/badge.svg?branch=master)](https://github.com/tim-fi/pyecs/actions?query=workflow%3ATests)
 [![codecov](https://codecov.io/gh/tim-fi/pyecs/branch/master/graph/badge.svg)](https://codecov.io/gh/tim-fi/pyecs)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![Checked with mypy](http://www.mypy-lang.org/static/mypy_badge.svg)](http://mypy-lang.org/)
