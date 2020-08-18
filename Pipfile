@@ -24,4 +24,4 @@ setuptools = "*"
 allow_prereleases = true
 
 [scripts]
-test = "pytest -vlr fEP --cov --lf"
+test = "pytest -vlr fEP --cov"
