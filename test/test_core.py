@@ -104,3 +104,25 @@ def test_entity_tree():
     p.remove()
     with pytest.raises(KeyError):
         controller.get_entity(e.uuid)
+
+
+def test_delayed_removals():
+    controller = core.ECController()
+
+    ca = ComponentA()
+    e1 = controller.add_entity(ca)
+    e2 = controller.add_entity()
+
+    e1.remove_components(ComponentA, delay=True)
+    e2.remove(delay=True)
+
+    assert ca == e1.get_component(ComponentA)
+    assert e2 == controller.get_entity(e2.uuid)
+
+    controller.apply_removals()
+
+    with pytest.raises(KeyError):
+        e1.get_component(ComponentA)
+
+    with pytest.raises(KeyError):
+        controller.get_entity(e2.uuid)

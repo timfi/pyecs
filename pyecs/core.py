@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from functools import lru_cache
-from typing import Any, Dict, Optional, Set, Tuple, Type, TypeVar
+from typing import Any, Dict, List, Optional, Set, Tuple, Type, TypeVar
 from uuid import UUID
 from uuid import uuid4 as get_uuid
 
@@ -51,13 +51,13 @@ class Entity:
         """Get components from entity."""
         return self._controller.get_components(self.uuid, *c_types)
 
-    def remove_components(self, *c_types: type):
+    def remove_components(self, *c_types: type, delay: bool = False):
         """Remove component from entity."""
-        self._controller.remove_components(self.uuid, *c_types)
+        self._controller.remove_components(self.uuid, *c_types, delay=delay)
 
-    def remove(self):
+    def remove(self, *, delay: bool = False):
         """Remove entity from ECController."""
-        self._controller.remove_entity(self.uuid)
+        self._controller.remove_entity(self.uuid, delay=delay)
 
     def __eq__(self, other: Any) -> bool:
         return isinstance(other, Entity) and self.uuid == other.uuid
@@ -69,18 +69,24 @@ class ECController:
         "entity_hirarchy",
         "entity_hirarchy_rev",
         "components",
+        "entity_delete_buffer",
+        "component_delete_buffer",
     )
 
     entities: Dict[UUID, Set[str]]
     entity_hirarchy: Dict[UUID, Set[UUID]]
     entity_hirarchy_rev: Dict[UUID, Optional[UUID]]
     components: Dict[str, Dict[UUID, Any]]
+    entity_delete_buffer: List[UUID]
+    component_delete_buffer: List[Tuple[UUID, type]]
 
     def __init__(self):
         self.entities = {}
         self.entity_hirarchy = {}
         self.entity_hirarchy_rev = {}
         self.components = defaultdict(dict)
+        self.entity_delete_buffer = []
+        self.component_delete_buffer = []
 
     def clear_cache(self):
         """Clear LRU and misc caches."""
@@ -99,6 +105,8 @@ class ECController:
         self.entity_hirarchy.clear()
         self.entity_hirarchy_rev.clear()
         self.components.clear()
+        self.entity_delete_buffer.clear()
+        self.component_delete_buffer.clear()
 
     def add_entity(
         self,
@@ -179,13 +187,20 @@ class ECController:
             else None
         )
 
-    def remove_components(self, uuid: UUID, *c_types: type):
-        self.entities[uuid] -= {c_type.__qualname__ for c_type in c_types}
-        for c_type in c_types:
-            del self.components[c_type.__qualname__][uuid]
-        self.clear_cache()
+    def _remove_component(self, uuid: UUID, c_type: type):
+        self.entities[uuid] -= {c_type.__qualname__}
+        del self.components[c_type.__qualname__][uuid]
 
-    def remove_entity(self, uuid: UUID):
+    def remove_components(self, uuid: UUID, *c_types: type, delay: bool = False):
+        if delay:
+            for c_type in c_types:
+                self.component_delete_buffer.append((uuid, c_type))
+        else:
+            for c_type in c_types:
+                self._remove_component(uuid, c_type)
+            self.clear_cache()
+
+    def _remove_entity(self, uuid: UUID):
         for c_name in self.entities.pop(uuid, ()):
             del self.components[c_name][uuid]
 
@@ -197,7 +212,26 @@ class ECController:
 
         del self.entity_hirarchy[uuid]
 
-        self.clear_cache()
+    def remove_entity(self, uuid: UUID, *, delay: bool = False):
+        if delay:
+            self.entity_delete_buffer.append(uuid)
+        else:
+            self._remove_entity(uuid)
+            self.clear_cache()
+
+    def apply_removals(self):
+        dirty = False
+
+        for uuid in self.entity_delete_buffer:
+            self._remove_entity(uuid)
+            dirty = True
+
+        for uuid, c_type in self.component_delete_buffer:
+            self._remove_component(uuid, c_type)
+            dirty = True
+
+        if dirty:
+            self.clear_cache()
 
     def __hash__(self):
         return id(self)
