@@ -1,12 +1,12 @@
 # pyecs
 _A simple implementation of the Entity-Component pattern._
 
-[![PyPI](https://img.shields.io/pypi/v/pyecs)](https://pypi.org/project/pyecs)
+[![PyPI - Version](https://img.shields.io/pypi/v/pyecs)](https://pypi.org/project/pyecs)
 [![PyPI - Status](https://img.shields.io/pypi/status/pyecs)](https://pypi.org/project/pyecs)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/pyecs)](https://pypi.org/project/pyecs)
 [![PyPI - License](https://img.shields.io/pypi/l/pyecs)](https://opensource.org/licenses/MIT)
 
-[![Tests](https://github.com/tim-fi/pyecs/workflows/Tests/badge.svg?branch=master)](https://github.com/tim-fi/pyecs/actions?query=workflow%3ATests)
+[![Build Status](https://img.shields.io/github/workflow/status/tim-fi/pyecs/Tests?logo=github)](https://github.com/tim-fi/pyecs/actions?query=workflow%3ATests)
 [![codecov](https://codecov.io/gh/tim-fi/pyecs/branch/master/graph/badge.svg)](https://codecov.io/gh/tim-fi/pyecs)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![Checked with mypy](http://www.mypy-lang.org/static/mypy_badge.svg)](http://mypy-lang.org/)
@@ -41,9 +41,10 @@ if __name__ == "__main__":
     controller = ECController()
 
     # 3. add some entities
-    controller.add_entity(Transform(), Rigidbody(acceleration=(1.0, 0.0)))
-    controller.add_entity(Transform(), Rigidbody(acceleration=(0.0, 1.0)))
-    controller.add_entity(Transform(), Rigidbody(acceleration=(1.0, 1.0)))
+    scene = controller.add_entity()
+    scene.add_child(Transform(), Rigidbody(acceleration=(1.0, 0.0)))
+    scene.add_child(Transform(), Rigidbody(acceleration=(0.0, 1.0)))
+    scene.add_child(Transform(), Rigidbody(acceleration=(1.0, 1.0)))
 
     # 4. run everything
     while True:

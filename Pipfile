@@ -26,5 +26,3 @@ allow_prereleases = true
 
 [scripts]
 test = "pytest -vlr fEP --cov"
-build = "python setup.py sdist bdist_wheel"
-deploy = "twine upload dist/* --skip-existing"
