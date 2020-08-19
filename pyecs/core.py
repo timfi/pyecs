@@ -39,6 +39,10 @@ class Entity:
         """Retrieve parent entity."""
         return self._controller.get_parent(self.uuid)
 
+    def add_child(self, *components: Any, uuid: Optional[UUID] = None) -> Entity:
+        """Add child entity."""
+        return self._controller.add_entity(*components, parent=self, uuid=uuid)
+
     def add_components(self, *components: Any):
         """Add components to entity."""
         self._controller.add_components(self.uuid, *components)

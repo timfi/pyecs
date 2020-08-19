@@ -92,7 +92,7 @@ def test_entity_tree():
     controller = core.ECController()
 
     p = controller.add_entity()
-    e = controller.add_entity(parent=p)
+    e = p.add_child()
 
     assert e.get_parent() == p
     assert p.get_children() == (e,)
