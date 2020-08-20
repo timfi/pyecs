@@ -48,8 +48,7 @@ if __name__ == "__main__":
 
     # 4. run everything
     while True:
-        for entity in controller.get_entities_with(Transform, Rigidbody):
-            transform, rigidbody = entity.get_components(Transform, Rigidbody)
+        for transform, rigidbody in controller.get_entities_with(Transform, Rigidbody, unpack=True):
             rigidbody.velocity = (
                 rigidbody.velocity[0] + rigidbody.acceleration[0],
                 rigidbody.velocity[1] + rigidbody.acceleration[1],

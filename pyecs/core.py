@@ -1,10 +1,34 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from functools import lru_cache
-from typing import Any, Dict, List, Optional, Set, Tuple, Type, TypeVar
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    List,
+    Literal,
+    Optional,
+    Set,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+    overload,
+)
 from uuid import UUID
 from uuid import uuid4 as get_uuid
+
+F = TypeVar("F", bound=Callable)
+if TYPE_CHECKING:
+
+    def lru_cache(f: F) -> F:
+        ...
+
+
+else:
+    from functools import lru_cache
+
 
 __all__ = ("ECController", "Entity")
 
@@ -98,7 +122,6 @@ class ECController:
         self.get_components.cache_clear()
         self.get_entity.cache_clear()
         self.get_entities_with.cache_clear()
-        self.get_unpacked_entities_with.cache_clear()
         self.get_children.cache_clear()
         self.get_parent.cache_clear()
 
@@ -161,23 +184,35 @@ class ECController:
         else:
             raise KeyError("Unknown entity id.")
 
-    @lru_cache
-    def get_entities_with(self, *c_types: type) -> Tuple[Entity, ...]:
-        target_c_names = {c_type.__qualname__ for c_type in c_types}
-        return tuple(
-            self.get_entity(uuid)
-            for uuid, c_names in self.entities.items()
-            if target_c_names <= c_names
-        )
+    @overload
+    def get_entities_with(
+        self, *c_types: type, unpack: Literal[True]
+    ) -> Tuple[Tuple[Any, ...], ...]:
+        ...
+
+    @overload
+    def get_entities_with(
+        self, *c_types: type, unpack: Literal[False]
+    ) -> Tuple[Entity, ...]:
+        ...
 
     @lru_cache
-    def get_unpacked_entities_with(self, *c_types: type) -> Tuple[Tuple[Any, ...], ...]:
+    def get_entities_with(
+        self, *c_types: type, unpack: bool = False
+    ) -> Union[Tuple[Entity, ...], Tuple[Tuple[Any, ...], ...]]:
         target_c_names = {c_type.__qualname__ for c_type in c_types}
-        return tuple(
-            tuple(self.get_component(uuid, c_type) for c_type in c_types)
-            for uuid, c_names in self.entities.items()
-            if target_c_names <= c_names
-        )
+        if unpack:
+            return tuple(
+                tuple(self.get_component(uuid, c_type) for c_type in c_types)
+                for uuid, c_names in self.entities.items()
+                if target_c_names <= c_names
+            )
+        else:
+            return tuple(
+                self.get_entity(uuid)
+                for uuid, c_names in self.entities.items()
+                if target_c_names <= c_names
+            )
 
     @lru_cache
     def get_children(self, uuid: UUID) -> Tuple[Entity, ...]:

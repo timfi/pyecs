@@ -61,10 +61,10 @@ def test_entity_component_workflow():
     assert _e1 == _e2
     assert _e2 == _e3
 
-    _c1, _c2 = controller.get_unpacked_entities_with(ComponentA, ComponentB)[0]
+    _c1, _c2 = controller.get_entities_with(ComponentA, ComponentB, unpack=True)[0]
     assert _c1 == ca and _c2 == cb
 
-    _c1, _c2 = controller.get_unpacked_entities_with(ComponentB, ComponentA)[0]
+    _c1, _c2 = controller.get_entities_with(ComponentB, ComponentA, unpack=True)[0]
     assert _c1 == cb and _c2 == ca
 
     e.remove_components(ComponentA)
