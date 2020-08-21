@@ -119,12 +119,8 @@ class ECController:
 
     def clear_cache(self):
         """Clear LRU and misc caches."""
-        self.get_component.cache_clear()
         self.get_components.cache_clear()
-        self.get_entity.cache_clear()
         self.get_entities_with.cache_clear()
-        self.get_children.cache_clear()
-        self.get_parent.cache_clear()
 
     def clear(self):
         """Delete all data."""
@@ -165,7 +161,6 @@ class ECController:
 
         self.clear_cache()
 
-    @lru_cache
     def get_component(self, uuid: UUID, c_type: Type[C]) -> C:
         return self.components[c_type.__qualname__][uuid]  # type: ignore
 
@@ -178,14 +173,12 @@ class ECController:
                 self.components[c_name][uuid] for c_name in self.entities[uuid]
             )
 
-    @lru_cache
     def get_entity(self, uuid: UUID) -> Entity:
         if uuid in self.entities:
             return Entity(self, uuid)
         else:
             raise KeyError("Unknown entity id.")
 
-    @lru_cache
     def get_entities(self) -> Tuple[Entity, ...]:
         return tuple(Entity(self, uuid) for uuid in self.entities)
 
@@ -208,7 +201,7 @@ class ECController:
         target_c_names = {c_type.__qualname__ for c_type in c_types}
         if unpack:
             return tuple(
-                tuple(self.get_component(uuid, c_type) for c_type in c_types)
+                self.get_components(uuid, *c_types)
                 for uuid, c_names in self.entities.items()
                 if target_c_names <= c_names
             )
@@ -219,11 +212,9 @@ class ECController:
                 if target_c_names <= c_names
             )
 
-    @lru_cache
     def get_children(self, uuid: UUID) -> Tuple[Entity, ...]:
         return tuple(Entity(self, c_uuid) for c_uuid in self.entity_hirarchy[uuid])
 
-    @lru_cache
     def get_parent(self, uuid: UUID) -> Optional[Entity]:
         return (
             Entity(self, p_uuid)
