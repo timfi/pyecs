@@ -30,7 +30,7 @@ else:
     from functools import lru_cache
 
 
-__version__ = "0.10"
+__version__ = "0.11"
 __all__ = ("ECController", "Entity")
 
 
