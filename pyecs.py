@@ -30,6 +30,7 @@ else:
     from functools import lru_cache
 
 
+__version__ = "0.10"
 __all__ = ("ECController", "Entity")
 
 
@@ -183,6 +184,10 @@ class ECController:
             return Entity(self, uuid)
         else:
             raise KeyError("Unknown entity id.")
+
+    @lru_cache
+    def get_entities(self) -> Tuple[Entity, ...]:
+        return tuple(Entity(self, uuid) for uuid in self.entities)
 
     @overload
     def get_entities_with(

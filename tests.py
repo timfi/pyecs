@@ -2,7 +2,7 @@ from uuid import uuid1
 
 import pytest
 
-from pyecs import core
+from pyecs import ECController
 
 
 class ComponentA:
@@ -14,12 +14,14 @@ class ComponentB:
 
 
 def test_entity_component_workflow():
-    controller = core.ECController()
+    controller = ECController()
 
     ca = ComponentA()
     e = controller.add_entity(ca)
 
     _e = controller.get_entity(e.uuid)
+    assert e == _e
+    _e, *_ = controller.get_entities()
     assert e == _e
 
     with pytest.raises(KeyError):
@@ -89,7 +91,7 @@ def test_entity_component_workflow():
 
 
 def test_entity_tree():
-    controller = core.ECController()
+    controller = ECController()
 
     p = controller.add_entity()
     e = p.add_child()
@@ -107,7 +109,7 @@ def test_entity_tree():
 
 
 def test_delayed_removals():
-    controller = core.ECController()
+    controller = ECController()
 
     ca = ComponentA()
     e1 = controller.add_entity(ca)
