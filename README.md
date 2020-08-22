@@ -22,7 +22,7 @@ pip install pyecs
 from dataclasses import dataclass
 from typing import Tuple
 
-from pyecs import ECController
+from pyecs import Store
 
 # 1. build your components
 @dataclass
@@ -37,18 +37,18 @@ class Rigidbody:
 
 
 if __name__ == "__main__":
-    # 2. intialize controller
-    controller = ECController()
+    # 2. intialize entity-component store
+    store = Store()
 
     # 3. add some entities
-    scene = controller.add_entity()
+    scene = store.add_entity()
     scene.add_child(Transform(), Rigidbody(acceleration=(1.0, 0.0)))
     scene.add_child(Transform(), Rigidbody(acceleration=(0.0, 1.0)))
     scene.add_child(Transform(), Rigidbody(acceleration=(1.0, 1.0)))
 
     # 4. run everything
     while True:
-        for transform, rigidbody in controller.get_entities_with(Transform, Rigidbody, unpack=True):
+        for transform, rigidbody in store.get_entities_with(Transform, Rigidbody, unpack=True):
             rigidbody.velocity = (
                 rigidbody.velocity[0] + rigidbody.acceleration[0],
                 rigidbody.velocity[1] + rigidbody.acceleration[1],

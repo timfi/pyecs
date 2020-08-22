@@ -31,7 +31,7 @@ else:
 
 
 __version__ = "0.11"
-__all__ = ("ECController", "Entity")
+__all__ = ("Store", "Entity")
 
 
 C = TypeVar("C")
@@ -39,10 +39,10 @@ C = TypeVar("C")
 
 class Entity:
     __slots__ = ("_controller", "_uuid")
-    _controller: ECController
+    _controller: Store
     _uuid: UUID
 
-    def __init__(self, controller: ECController, uuid: UUID):
+    def __init__(self, controller: Store, uuid: UUID):
         self._controller = controller
         self._uuid = uuid
 
@@ -53,7 +53,7 @@ class Entity:
 
     @property
     def uuid(self):
-        """Identifier of this entity in the ECController."""
+        """Identifier of this entity in the Store."""
         return self._uuid
 
     def get_children(self) -> Tuple[Entity, ...]:
@@ -85,14 +85,14 @@ class Entity:
         self._controller.remove_components(self.uuid, *c_types, delay=delay)
 
     def remove(self, *, delay: bool = False):
-        """Remove entity from ECController."""
+        """Remove entity from Store."""
         self._controller.remove_entity(self.uuid, delay=delay)
 
     def __eq__(self, other: Any) -> bool:
         return isinstance(other, Entity) and self.uuid == other.uuid
 
 
-class ECController:
+class Store:
     __slots__ = (
         "entities",
         "entity_hirarchy",
