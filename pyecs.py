@@ -7,15 +7,11 @@ from typing import (
     Any,
     Callable,
     Dict,
-    List,
-    Literal,
     Optional,
     Set,
     Tuple,
     Type,
     TypeVar,
-    Union,
-    overload,
 )
 from uuid import UUID
 from uuid import uuid4 as get_uuid
@@ -31,7 +27,7 @@ else:
     from functools import lru_cache
 
 
-__version__ = "0.13"
+__version__ = "0.14"
 __all__ = ("Store", "Entity")
 
 
@@ -105,35 +101,15 @@ class Entity:
         """Get all child entities."""
         return self._store.get_children(self.uuid)
 
-    @overload
     def get_children_with(
-        self, *c_types: type, unpack: Literal[True]
-    ) -> Tuple[Tuple[Any, ...], ...]:  # noqa
-        ...
-
-    @overload
-    def get_children_with(
-        self, *c_types: type, unpack: Literal[False]
-    ) -> Tuple[Entity, ...]:  # noqa
-        ...
-
-    @overload
-    def get_children_with(
-        self, *c_types: type, unpack: bool = False
-    ) -> Union[Tuple[Entity, ...], Tuple[Tuple[Any, ...], ...]]:  # noqa
-        ...
-
-    def get_children_with(
-        self, *c_types: type, unpack: bool = False
-    ) -> Union[Tuple[Entity, ...], Tuple[Tuple[Any, ...], ...]]:
+        self, *c_types: type
+    ) -> Tuple[Tuple[Entity, Tuple[Any, ...]], ...]:
         """Get all children with the given components.
 
         :param *c_types: type: Types of the components the entities should have.
-        :param unpack: bool: Only return the components. They will be in the order
-                             defined by `c_types`. (Default value = False)
 
         """
-        return self._store.get_children_with(self.uuid, *c_types, unpack=unpack)
+        return self._store.get_children_with(self.uuid, *c_types)
 
     def remove_components(self, *c_types: type, delay: bool = False):
         """Remove component from entity.
@@ -171,16 +147,16 @@ class Store:
     entity_hirarchy: Dict[UUID, Set[UUID]]
     entity_hirarchy_rev: Dict[UUID, Optional[UUID]]
     components: Dict[str, Dict[UUID, Any]]
-    entity_delete_buffer: List[UUID]
-    component_delete_buffer: List[Tuple[UUID, type]]
+    entity_delete_buffer: Set[UUID]
+    component_delete_buffer: Set[Tuple[UUID, type]]
 
     def __init__(self):  # noqa
         self.entities = {}
         self.entity_hirarchy = {}
         self.entity_hirarchy_rev = {}
         self.components = defaultdict(dict)
-        self.entity_delete_buffer = []
-        self.component_delete_buffer = []
+        self.entity_delete_buffer = set()
+        self.component_delete_buffer = set()
 
     def __hash__(self):  # noqa
         return id(self)
@@ -284,48 +260,21 @@ class Store:
         """Get all entities in this store."""
         return tuple(Entity(self, uuid) for uuid in self.entities)
 
-    @overload
-    def get_entities_with(
-        self, *c_types: type, unpack: Literal[True]
-    ) -> Tuple[Tuple[Any, ...], ...]:  # noqa
-        ...
-
-    @overload
-    def get_entities_with(
-        self, *c_types: type, unpack: Literal[False]
-    ) -> Tuple[Entity, ...]:  # noqa
-        ...
-
-    @overload
-    def get_entities_with(
-        self, *c_types: type, unpack: bool = False
-    ) -> Union[Tuple[Entity, ...], Tuple[Tuple[Any, ...], ...]]:  # noqa
-        ...
-
     @lru_cache
     def get_entities_with(
-        self, *c_types: type, unpack: bool = False
-    ) -> Union[Tuple[Entity, ...], Tuple[Tuple[Any, ...], ...]]:
+        self, *c_types: type
+    ) -> Tuple[Tuple[Entity, Tuple[Any, ...]], ...]:
         """Get all entities with the given components.
 
         :param *c_types: type: Types of the components the entities should have.
-        :param unpack: bool: Only return the components. They will be in the order
-                             defined by `c_types`. (Default value = False)
 
         """
         target_c_names = {c_type.__qualname__ for c_type in c_types}
-        if unpack:
-            return tuple(
-                self.get_components(uuid, *c_types)
-                for uuid, c_names in self.entities.items()
-                if target_c_names <= c_names
-            )
-        else:
-            return tuple(
-                self.get_entity(uuid)
-                for uuid, c_names in self.entities.items()
-                if target_c_names <= c_names
-            )
+        return tuple(
+            (self.get_entity(uuid), self.get_components(uuid, *c_types))
+            for uuid, c_names in self.entities.items()
+            if target_c_names <= c_names
+        )
 
     def get_children(self, uuid: UUID) -> Tuple[Entity, ...]:
         """Get children of an entity.
@@ -335,48 +284,21 @@ class Store:
         """
         return tuple(Entity(self, c_uuid) for c_uuid in self.entity_hirarchy[uuid])
 
-    @overload
-    def get_children_with(
-        self, uuid: UUID, *c_types: type, unpack: Literal[True]
-    ) -> Tuple[Tuple[Any, ...], ...]:  # noqa
-        ...
-
-    @overload
-    def get_children_with(
-        self, uuid: UUID, *c_types: type, unpack: Literal[False]
-    ) -> Tuple[Entity, ...]:  # noqa
-        ...
-
-    @overload
-    def get_children_with(
-        self, uuid: UUID, *c_types: type, unpack: bool = False
-    ) -> Union[Tuple[Entity, ...], Tuple[Tuple[Any, ...], ...]]:  # noqa
-        ...
-
     @lru_cache
     def get_children_with(
-        self, uuid: UUID, *c_types: type, unpack: bool = False
-    ) -> Union[Tuple[Entity, ...], Tuple[Tuple[Any, ...], ...]]:
+        self, uuid: UUID, *c_types: type
+    ) -> Tuple[Tuple[Entity, Tuple[Any, ...]], ...]:
         """Get all children of an entity with the given components.
 
         :param *c_types: type: Types of the components the entities should have.
-        :param unpack: bool: Only return the components. They will be in the order
-                             defined by `c_types`. (Default value = False)
 
         """
         target_c_names = {c_type.__qualname__ for c_type in c_types}
-        if unpack:
-            return tuple(
-                self.get_components(c_uuid, *c_types)
-                for c_uuid in self.entity_hirarchy[uuid]
-                if target_c_names <= self.entities[c_uuid]
-            )
-        else:
-            return tuple(
-                self.get_entity(c_uuid)
-                for c_uuid in self.entity_hirarchy[uuid]
-                if target_c_names <= self.entities[c_uuid]
-            )
+        return tuple(
+            (self.get_entity(c_uuid), self.get_components(c_uuid, *c_types))
+            for c_uuid in self.entity_hirarchy[uuid]
+            if target_c_names <= self.entities[c_uuid]
+        )
 
     def get_parent(self, uuid: UUID) -> Optional[Entity]:
         """Get parent of an entity.
@@ -405,7 +327,7 @@ class Store:
         """
         if delay:
             for c_type in c_types:
-                self.component_delete_buffer.append((uuid, c_type))
+                self.component_delete_buffer.add((uuid, c_type))
         else:
             for c_type in c_types:
                 self._remove_component(uuid, c_type)
@@ -432,7 +354,7 @@ class Store:
 
         """
         if delay:
-            self.entity_delete_buffer.append(uuid)
+            self.entity_delete_buffer.add(uuid)
         else:
             self._remove_entity(uuid)
             self.clear_cache()
@@ -444,10 +366,16 @@ class Store:
         for uuid in self.entity_delete_buffer:
             self._remove_entity(uuid)
             dirty = True
+        self.entity_delete_buffer.clear()
 
         for uuid, c_type in self.component_delete_buffer:
-            self._remove_component(uuid, c_type)
+            try:
+                self._remove_component(uuid, c_type)
+            except KeyError:
+                # Entity was deleted as well, so the component is already gone.
+                ...
             dirty = True
+        self.component_delete_buffer.clear()
 
         if dirty:
             self.clear_cache()
