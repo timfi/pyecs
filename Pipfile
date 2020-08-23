@@ -20,9 +20,7 @@ pytest-cov = "*"
 twine = "*"
 setuptools = "*"
 wheel = "*"
+pydocstyle = "*"
 
 [pipenv]
 allow_prereleases = true
-
-[scripts]
-test = "pytest -vlr fEP --cov"

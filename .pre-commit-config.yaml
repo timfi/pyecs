@@ -24,6 +24,14 @@ repos:
     types: [python]
     exclude: setup.py
 
+  - id: pydocstyle
+    name: pydocstyle
+    stages: [commit]
+    language: system
+    entry: pipenv run pydocstyle
+    types: [python]
+    files: pyecs.py
+
   - id: mypy
     name: mypy
     stages: [commit]
