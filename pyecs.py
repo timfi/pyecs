@@ -31,7 +31,7 @@ else:
     from functools import lru_cache
 
 
-__version__ = "0.11"
+__version__ = "0.12"
 __all__ = ("Store", "Entity")
 
 
