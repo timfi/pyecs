@@ -30,7 +30,7 @@ repos:
     language: system
     entry: pipenv run pydocstyle
     types: [python]
-    files: pyecs.py
+    exclude: setup.py
 
   - id: mypy
     name: mypy

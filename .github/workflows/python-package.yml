@@ -32,6 +32,8 @@ jobs:
       run: flake8
     - name: Typecheck with mypy
       run: mypy
+    - name: Stylecheck with pydocstyle
+      run: pydocstyle
     - name: Test with pytest
       run: pytest --cov-report=xml --cov
     - name: Upload coverage report
