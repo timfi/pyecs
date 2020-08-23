@@ -139,3 +139,13 @@ def test_delayed_removals():
 
     with pytest.raises(KeyError):
         store.get_entity(e2.uuid)
+
+    store.clear()
+
+    ca = ComponentA()
+    e1 = store.add_entity(ca)
+
+    e1.remove_components(ComponentA, delay=True)
+    e1.remove(delay=True)
+
+    store.apply_removals()
