@@ -98,11 +98,11 @@ class Entity:
         return self._store.get_components(self.uuid, *c_types)
 
     def get_parent(self) -> Optional[Entity]:
-        """Retrieve parent entity."""
+        """Get parent entity."""
         return self._store.get_parent(self.uuid)
 
     def get_children(self) -> Tuple[Entity, ...]:
-        """Retrieve child entities."""
+        """Get all child entities."""
         return self._store.get_children(self.uuid)
 
     @overload
@@ -126,7 +126,7 @@ class Entity:
     def get_children_with(
         self, *c_types: type, unpack: bool = False
     ) -> Union[Tuple[Entity, ...], Tuple[Tuple[Any, ...], ...]]:
-        """Get all children of with the given components.
+        """Get all children with the given components.
 
         :param *c_types: type: Types of the components the entities should have.
         :param unpack: bool: Only return the components. They will be in the order
