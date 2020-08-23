@@ -48,7 +48,7 @@ if __name__ == "__main__":
 
     # 4. run everything
     while True:
-        for transform, rigidbody in store.get_entities_with(Transform, Rigidbody, unpack=True):
+        for entity, (transform, rigidbody) in store.get_entities_with(Transform, Rigidbody):
             rigidbody.velocity = (
                 rigidbody.velocity[0] + rigidbody.acceleration[0],
                 rigidbody.velocity[1] + rigidbody.acceleration[1],
