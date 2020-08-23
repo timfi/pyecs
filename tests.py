@@ -107,6 +107,21 @@ def test_entity_tree():
     with pytest.raises(KeyError):
         store.get_entity(e.uuid)
 
+    store.clear()
+
+    p = store.add_entity()
+    p.add_child()
+    c1 = ComponentA()
+    e2 = p.add_child(c1)
+    c2 = ComponentA()
+    e3 = p.add_child(c2, ComponentB())
+
+    assert p.get_children_with(ComponentA) in [(e2, e3), (e3, e2)]
+    assert p.get_children_with(ComponentA, unpack=True) in [
+        ((c1,), (c2,)),
+        ((c2,), (c1,)),
+    ]
+
 
 def test_delayed_removals():
     store = Store()

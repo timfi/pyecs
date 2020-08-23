@@ -31,7 +31,7 @@ else:
     from functools import lru_cache
 
 
-__version__ = "0.12"
+__version__ = "0.13"
 __all__ = ("Store", "Entity")
 
 
@@ -61,14 +61,6 @@ class Entity:
 
     def __eq__(self, other: Any) -> bool:  # noqa
         return isinstance(other, Entity) and self.uuid == other.uuid
-
-    def get_children(self) -> Tuple[Entity, ...]:
-        """Retrieve child entities."""
-        return self._store.get_children(self.uuid)
-
-    def get_parent(self) -> Optional[Entity]:
-        """Retrieve parent entity."""
-        return self._store.get_parent(self.uuid)
 
     def add_child(self, *components: Any, uuid: Optional[UUID] = None) -> Entity:
         """Create child entity.
@@ -104,6 +96,44 @@ class Entity:
 
         """
         return self._store.get_components(self.uuid, *c_types)
+
+    def get_parent(self) -> Optional[Entity]:
+        """Retrieve parent entity."""
+        return self._store.get_parent(self.uuid)
+
+    def get_children(self) -> Tuple[Entity, ...]:
+        """Retrieve child entities."""
+        return self._store.get_children(self.uuid)
+
+    @overload
+    def get_children_with(
+        self, *c_types: type, unpack: Literal[True]
+    ) -> Tuple[Tuple[Any, ...], ...]:  # noqa
+        ...
+
+    @overload
+    def get_children_with(
+        self, *c_types: type, unpack: Literal[False]
+    ) -> Tuple[Entity, ...]:  # noqa
+        ...
+
+    @overload
+    def get_children_with(
+        self, *c_types: type, unpack: bool = False
+    ) -> Union[Tuple[Entity, ...], Tuple[Tuple[Any, ...], ...]]:  # noqa
+        ...
+
+    def get_children_with(
+        self, *c_types: type, unpack: bool = False
+    ) -> Union[Tuple[Entity, ...], Tuple[Tuple[Any, ...], ...]]:
+        """Get all children of with the given components.
+
+        :param *c_types: type: Types of the components the entities should have.
+        :param unpack: bool: Only return the components. They will be in the order
+                             defined by `c_types`. (Default value = False)
+
+        """
+        return self._store.get_children_with(self.uuid, *c_types, unpack=unpack)
 
     def remove_components(self, *c_types: type, delay: bool = False):
         """Remove component from entity.
@@ -266,6 +296,12 @@ class Store:
     ) -> Tuple[Entity, ...]:  # noqa
         ...
 
+    @overload
+    def get_entities_with(
+        self, *c_types: type, unpack: bool = False
+    ) -> Union[Tuple[Entity, ...], Tuple[Tuple[Any, ...], ...]]:  # noqa
+        ...
+
     @lru_cache
     def get_entities_with(
         self, *c_types: type, unpack: bool = False
@@ -298,6 +334,49 @@ class Store:
 
         """
         return tuple(Entity(self, c_uuid) for c_uuid in self.entity_hirarchy[uuid])
+
+    @overload
+    def get_children_with(
+        self, uuid: UUID, *c_types: type, unpack: Literal[True]
+    ) -> Tuple[Tuple[Any, ...], ...]:  # noqa
+        ...
+
+    @overload
+    def get_children_with(
+        self, uuid: UUID, *c_types: type, unpack: Literal[False]
+    ) -> Tuple[Entity, ...]:  # noqa
+        ...
+
+    @overload
+    def get_children_with(
+        self, uuid: UUID, *c_types: type, unpack: bool = False
+    ) -> Union[Tuple[Entity, ...], Tuple[Tuple[Any, ...], ...]]:  # noqa
+        ...
+
+    @lru_cache
+    def get_children_with(
+        self, uuid: UUID, *c_types: type, unpack: bool = False
+    ) -> Union[Tuple[Entity, ...], Tuple[Tuple[Any, ...], ...]]:
+        """Get all children of an entity with the given components.
+
+        :param *c_types: type: Types of the components the entities should have.
+        :param unpack: bool: Only return the components. They will be in the order
+                             defined by `c_types`. (Default value = False)
+
+        """
+        target_c_names = {c_type.__qualname__ for c_type in c_types}
+        if unpack:
+            return tuple(
+                self.get_components(c_uuid, *c_types)
+                for c_uuid in self.entity_hirarchy[uuid]
+                if target_c_names <= self.entities[c_uuid]
+            )
+        else:
+            return tuple(
+                self.get_entity(c_uuid)
+                for c_uuid in self.entity_hirarchy[uuid]
+                if target_c_names <= self.entities[c_uuid]
+            )
 
     def get_parent(self, uuid: UUID) -> Optional[Entity]:
         """Get parent of an entity.
