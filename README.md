@@ -8,6 +8,7 @@ _A simple implementation of the Entity-Component pattern._
 
 [![Build Status](https://img.shields.io/github/workflow/status/tim-fi/pyecs/Tests?logo=github)](https://github.com/tim-fi/pyecs/actions?query=workflow%3ATests)
 [![codecov](https://codecov.io/gh/tim-fi/pyecs/branch/master/graph/badge.svg)](https://codecov.io/gh/tim-fi/pyecs)
+[![codebeat badge](https://codebeat.co/badges/f8f52571-da05-4615-8ab8-6fee01f258cc)](https://codebeat.co/projects/github-com-tim-fi-pyecs-master)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![Checked with mypy](http://www.mypy-lang.org/static/mypy_badge.svg)](http://mypy-lang.org/)
 
