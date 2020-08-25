@@ -27,7 +27,7 @@ else:
     from functools import lru_cache
 
 
-__version__ = "0.14"
+__version__ = "0.15"
 __all__ = ("Store", "Entity")
 
 
@@ -87,6 +87,9 @@ class Entity:
     def get_components(self, *c_types: type) -> Tuple[Any, ...]:
         """Get multiple components from entity.
 
+        Note that proper typing is only supported for the single component
+        access (get_component).
+
         :param *c_types: type: Types of the components to get from the entity,
                                the result will be in the order these types are given.
 
@@ -101,9 +104,7 @@ class Entity:
         """Get all child entities."""
         return self._store.get_children(self.uuid)
 
-    def get_children_with(
-        self, *c_types: type
-    ) -> Tuple[Tuple[Entity, Tuple[Any, ...]], ...]:
+    def get_children_with(self, *c_types: type) -> Tuple[Entity, ...]:
         """Get all children with the given components.
 
         :param *c_types: type: Types of the components the entities should have.
@@ -233,6 +234,9 @@ class Store:
     def get_components(self, uuid: UUID, *c_types: type) -> Tuple[Any, ...]:
         """Get multiple component from an entity.
 
+        Note that proper typing is only supported for the single component
+        access (get_component).
+
         :param uuid: UUID: UUID of the entity to get the components from.
         :param *c_types: type: Types of the components to get from the entity,
                                the result will be in the order these types are given.
@@ -261,9 +265,7 @@ class Store:
         return tuple(Entity(self, uuid) for uuid in self.entities)
 
     @lru_cache
-    def get_entities_with(
-        self, *c_types: type
-    ) -> Tuple[Tuple[Entity, Tuple[Any, ...]], ...]:
+    def get_entities_with(self, *c_types: type) -> Tuple[Entity, ...]:
         """Get all entities with the given components.
 
         :param *c_types: type: Types of the components the entities should have.
@@ -271,7 +273,7 @@ class Store:
         """
         target_c_names = {c_type.__qualname__ for c_type in c_types}
         return tuple(
-            (self.get_entity(uuid), self.get_components(uuid, *c_types))
+            self.get_entity(uuid)
             for uuid, c_names in self.entities.items()
             if target_c_names <= c_names
         )
@@ -285,9 +287,7 @@ class Store:
         return tuple(Entity(self, c_uuid) for c_uuid in self.entity_hirarchy[uuid])
 
     @lru_cache
-    def get_children_with(
-        self, uuid: UUID, *c_types: type
-    ) -> Tuple[Tuple[Entity, Tuple[Any, ...]], ...]:
+    def get_children_with(self, uuid: UUID, *c_types: type) -> Tuple[Entity, ...]:
         """Get all children of an entity with the given components.
 
         :param *c_types: type: Types of the components the entities should have.
@@ -295,7 +295,7 @@ class Store:
         """
         target_c_names = {c_type.__qualname__ for c_type in c_types}
         return tuple(
-            (self.get_entity(c_uuid), self.get_components(c_uuid, *c_types))
+            self.get_entity(c_uuid)
             for c_uuid in self.entity_hirarchy[uuid]
             if target_c_names <= self.entities[c_uuid]
         )

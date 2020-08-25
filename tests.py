@@ -55,15 +55,13 @@ def test_entity_component_workflow():
     )
     assert e.get_components() == store.get_components(e.uuid)
 
-    _e1, (_ca1,) = store.get_entities_with(ComponentA)[0]
-    _e2, (_cb1,) = store.get_entities_with(ComponentB)[0]
-    _e3, (_ca2, _cb2) = store.get_entities_with(ComponentA, ComponentB)[0]
+    _e1 = store.get_entities_with(ComponentA)[0]
+    _e2 = store.get_entities_with(ComponentB)[0]
+    _e3 = store.get_entities_with(ComponentA, ComponentB)[0]
 
     assert e == _e1
     assert _e1 == _e2
     assert _e2 == _e3
-    assert _ca1 == ca and _cb1 == cb
-    assert _ca2 == ca and _cb2 == cb
 
     e.remove_components(ComponentA)
 
@@ -107,16 +105,10 @@ def test_entity_tree():
 
     p = store.add_entity()
     p.add_child()
+    e1 = p.add_child(ComponentA())
+    e2 = p.add_child(ComponentA(), ComponentB())
 
-    c1 = ComponentA()
-    e1 = p.add_child(c1)
-    r1 = (e1, (c1,))
-
-    c2 = ComponentA()
-    e2 = p.add_child(c2, ComponentB())
-    r2 = (e2, (c2,))
-
-    assert p.get_children_with(ComponentA) in [(r1, r2), (r2, r1)]
+    assert p.get_children_with(ComponentA) in [(e1, e2), (e2, e1)]
 
 
 def test_delayed_removals():
