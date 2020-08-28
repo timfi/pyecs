@@ -1,15 +1,5 @@
 """Entity-Component Store Type-Stubs."""
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    Optional,
-    Set,
-    Tuple,
-    Type,
-    TypeVar,
-    overload,
-)
+from typing import *
 from uuid import UUID
 
 

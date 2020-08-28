@@ -50,8 +50,7 @@ if __name__ == "__main__":
     # 4. run everything
     while True:
         for entity in store.get_entities_with(Transform, Rigidbody):
-            rigidbody = entity.get_component(Rigidbody)
-            transform = entity.get_component(Transform)
+            transform, rigidbody = entity.get_components(Transform, Rigidbody)
 
             rigidbody.velocity = (
                 rigidbody.velocity[0] + rigidbody.acceleration[0],

@@ -3,7 +3,7 @@ from collections import defaultdict
 from functools import lru_cache
 from uuid import uuid4 as get_uuid
 
-__version__ = "0.16"
+__version__ = "0.17"
 __all__ = ("Store", "Entity")
 
 
@@ -129,6 +129,7 @@ class Store:
         """Clear LRU and misc caches."""
         self.get_components.cache_clear()
         self.get_entities_with.cache_clear()
+        self.get_children_with.cache_clear()
 
     def clear(self):
         """Delete all data."""
