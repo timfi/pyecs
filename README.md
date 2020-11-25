@@ -51,7 +51,6 @@ if __name__ == "__main__":
     while True:
         for entity in store.get_entities_with(Transform, Rigidbody):
             transform, rigidbody = entity.get_components(Transform, Rigidbody)
-
             rigidbody.velocity = (
                 rigidbody.velocity[0] + rigidbody.acceleration[0],
                 rigidbody.velocity[1] + rigidbody.acceleration[1],

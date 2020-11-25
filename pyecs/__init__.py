@@ -3,7 +3,7 @@ from collections import defaultdict
 from functools import lru_cache
 from uuid import uuid4 as get_uuid
 
-__version__ = "0.17"
+__version__ = "0.18"
 __all__ = ("Store", "Entity")
 
 
@@ -27,7 +27,11 @@ class Entity:
         return self._uuid
 
     def __eq__(self, other):  # noqa
-        return isinstance(other, Entity) and self.uuid == other.uuid
+        return (
+            isinstance(other, Entity)
+            and self.uuid == other.uuid
+            and self._store == other._store
+        )
 
     def add_child(self, *components, uuid=None):
         """Create child entity.
@@ -222,19 +226,20 @@ class Store:
         """Get all entities in this store."""
         return tuple(Entity(self, uuid) for uuid in self.entities)
 
+    def _filter_entities(self, entities, c_types):  # noqa
+        for c_type in c_types:
+            entities &= set(self.components[c_type.__qualname__])
+
+        return tuple(self.get_entity(uuid) for uuid in entities)
+
     @lru_cache
     def get_entities_with(self, *c_types):
         """Get all entities with the given components.
 
-        :param *c_types: sTypes of the components the entities should have.
+        :param *c_types: Types of the components the entities should have.
 
         """
-        target_c_names = {c_type.__qualname__ for c_type in c_types}
-        return tuple(
-            self.get_entity(uuid)
-            for uuid, c_names in self.entities.items()
-            if target_c_names <= c_names
-        )
+        return self._filter_entities(set(self.entities), c_types)
 
     def get_children(self, uuid):
         """Get children of an entity.
@@ -251,12 +256,7 @@ class Store:
         :param *c_types: Types of the components the entities should have.
 
         """
-        target_c_names = {c_type.__qualname__ for c_type in c_types}
-        return tuple(
-            self.get_entity(c_uuid)
-            for c_uuid in self.entity_hirarchy[uuid]
-            if target_c_names <= self.entities[c_uuid]
-        )
+        return self._filter_entities(self.entity_hirarchy[uuid], c_types)
 
     def get_parent(self, uuid):
         """Get parent of an entity.

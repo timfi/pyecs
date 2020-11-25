@@ -4,7 +4,7 @@ url = "https://pypi.python.org/simple"
 verify_ssl = true
 
 [requires]
-python_version = "3.8"
+python_version = "3.9"
 
 [packages]
 pyecs = {editable = true,path = "."}
@@ -21,6 +21,7 @@ twine = "*"
 setuptools = "*"
 wheel = "*"
 pydocstyle = "*"
+sphinx = "*"
 
 [pipenv]
 allow_prereleases = true
