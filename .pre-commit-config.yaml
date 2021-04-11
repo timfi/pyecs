@@ -13,7 +13,7 @@ repos:
     name: black
     stages: [commit]
     language: system
-    entry: poetry run black
+    entry: poetry run black .
     types: [python]
 
   - id: pydocstyle
