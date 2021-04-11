@@ -16,14 +16,6 @@ repos:
     entry: poetry run black
     types: [python]
 
-  - id: flake8
-    name: flake8
-    stages: [commit]
-    language: system
-    entry: poetry run flake8
-    types: [python]
-    exclude: setup.py
-
   - id: pydocstyle
     name: pydocstyle
     stages: [commit]
