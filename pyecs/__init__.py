@@ -3,7 +3,6 @@ from collections import defaultdict
 from functools import lru_cache
 from uuid import uuid4 as get_uuid
 
-__version__ = "0.18"
 __all__ = ("Store", "Entity")
 
 

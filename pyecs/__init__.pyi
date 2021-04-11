@@ -16,8 +16,7 @@ T7 = TypeVar("T7")
 T8 = TypeVar("T8")
 T9 = TypeVar("T9")
 
-def lru_cache(f: F) -> F:  # noqa
-    ...
+def lru_cache(f: F) -> F: ...
 
 class Entity:
     _store: Store
