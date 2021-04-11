@@ -49,7 +49,7 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
   
       - name: Lint with flake8
-        run: poetry run flake8
+        run: poetry run pflake8
 
       - name: Typecheck with mypy
         run: poetry run mypy
