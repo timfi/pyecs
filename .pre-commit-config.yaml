@@ -13,7 +13,7 @@ repos:
     name: black
     stages: [commit]
     language: system
-    entry: poetry run black .
+    entry: poetry run black
     types: [python]
 
   - id: pydocstyle
@@ -22,7 +22,6 @@ repos:
     language: system
     entry: poetry run pydocstyle
     types: [python]
-    exclude: setup.py
 
   - id: mypy
     name: mypy
@@ -30,13 +29,12 @@ repos:
     language: system
     entry: poetry run mypy
     types: [python]
-    pass_filenames: false
 
   - id: pytest
     name: pytest
     stages: [commit]
     language: system
-    entry: poetry run pytest
+    entry: poetry run pytest tests.py
     types: [python]
     pass_filenames: false
 
@@ -44,6 +42,6 @@ repos:
     name: pytest
     stages: [push]
     language: system
-    entry: poetry run pytest --cov --cov-fail-under=100
+    entry: poetry run pytest tests.py --cov --cov-fail-under=100
     types: [python]
     pass_filenames: false

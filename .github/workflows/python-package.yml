@@ -52,13 +52,13 @@ jobs:
         run: poetry run black . --check
 
       - name: Typecheck with mypy
-        run: poetry run mypy
+        run: poetry run mypy pyecs
 
       - name: Stylecheck with pydocstyle
-        run: poetry run pydocstyle
+        run: poetry run pydocstyle pyecs
 
       - name: Test with pytest
-        run: poetry run pytest --cov-report=xml --cov
+        run: poetry run pytest tests.py --cov-report=xml --cov
 
       - name: Upload coverage report
         run: poetry run codecov
